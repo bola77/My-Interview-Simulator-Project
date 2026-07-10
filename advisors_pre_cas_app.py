@@ -399,7 +399,6 @@ else:
 
         remaining, t_str = time_left()
         st.progress(idx / total_q, text=f"Question {idx + 1} of {total_q}")
-        st.caption(f"Time left for this question: {t_str}")
 
         left, right = st.columns([2, 1])
 
@@ -537,6 +536,25 @@ else:
                         st.warning("Please provide a sufficiently detailed follow-up (at least 20 words).")
 
         with right:
+             # Big, colour-coded ticking timer
+    st.markdown("### Time left")
+
+    # Choose colour based on remaining seconds
+    if remaining > 60:
+        timer_color = "green"
+    elif remaining > 30:
+        timer_color = "orange"
+    else:
+        timer_color = "red"
+
+    minutes, seconds = t_str.split(":")
+    st.markdown(
+        f"<h1 style='text-align: center; color: {timer_color};'>{minutes}:{seconds}</h1>",
+        unsafe_allow_html=True,
+    )
+
+    if remaining <= 30:
+        st.warning("Less than 30 seconds remaining for this question.")
             st.subheader("Live Scores")
             for i, sc in enumerate(st.session_state.scores):
                 bar = "█" * sc + "░" * (5 - sc)
