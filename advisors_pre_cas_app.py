@@ -1,5 +1,6 @@
 import random
 import time
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import streamlit as st
@@ -117,21 +118,18 @@ POSITIVE = [
 DEFAULT_THINK_TIME = 3
 DEFAULT_HINT_MODE = True
 DEFAULT_MIN_WORDS = 20
-
 QUESTION_TIME_SECONDS = 5 * 60  # 5 minutes per question
 MAX_VOICE_ATTEMPTS = 3
 
-# ------------ Prime Crown UK course clusters ------------
+# ------------ Prime Crown UK course clusters (truncated here, keep your full dict) ------------
 
 COURSE_PROFILES = {
-    # Paste your full COURSE_PROFILES dict here from the existing file.
-    # Example entry:
     "UG – Business & Management": {
         "examples": "Business Administration; Accounting & Finance; Marketing; International Business",
         "extra_tip": "Mention business modules (finance, marketing, strategy) and how they support your career in management or entrepreneurship.",
         "keywords": ["marketing", "finance", "accounting", "strategy", "international business"],
     },
-    # ... rest of your profiles ...
+    # ... keep all your existing profiles ...
 }
 
 # ------------ OpenAI Whisper client ------------
@@ -422,7 +420,7 @@ else:
                     )
                 )
 
-            # Prime Crown course cluster tip
+            # Course cluster tip
             course_track = st.session_state.profile.get("course_track")
             if course_track and course_track in COURSE_PROFILES:
                 cluster = COURSE_PROFILES[course_track]
@@ -461,7 +459,7 @@ else:
             if remaining == 0 and not st.session_state.voice_attempts:
                 st.warning("Time is up and no recording was submitted for this question.")
 
-            # Scoring from latest recorded transcript
+            # We base scoring purely on the latest recorded transcript
             if not st.session_state.show_followup:
                 if st.button("Submit Answer →", type="primary", use_container_width=True):
                     if not st.session_state.voice_attempts:
