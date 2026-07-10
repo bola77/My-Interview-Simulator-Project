@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 from openai import OpenAI
 from audio_recorder_streamlit import audio_recorder
@@ -257,7 +258,7 @@ with st.sidebar:
     st.header("👤 Applicant Profile")
 
     course_track = st.selectbox(
-        "Course track (Prime Crown UK list)",
+        "Course track ( UK list)",
         list(COURSE_PROFILES.keys()),
         index=0,
         help="Choose the closest cluster for your UK course.",
@@ -318,6 +319,7 @@ with st.sidebar:
 # ------------ Main UI ------------
 
 st.title("Advisors Academy Pre-CAS Interview")
+st_autorefresh(interval=1000, key="timer_refresh")
 st.caption("Practice realistic UK university Pre-CAS questions with instant feedback.")
 
 with st.expander("How your answers are scored"):
