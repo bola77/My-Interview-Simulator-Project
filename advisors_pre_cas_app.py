@@ -20,7 +20,7 @@ st.set_page_config(
 
 apply_advisors_theme()
 
-# ------------ Question bank & hints (for hints only) ------------
+# ------------ Question bank & hints ------------
 
 QUESTION_BANK = {
     "Study destination": [
@@ -121,101 +121,42 @@ DEFAULT_MIN_WORDS = 20
 QUESTION_TIME_SECONDS = 5 * 60  # 5 minutes per question
 MAX_VOICE_ATTEMPTS = 3
 
-# ------------ Prime Crown UK course clusters ------------
+# ------------ Prime Crown UK course clusters (truncated here, keep your full dict) ------------
 
 COURSE_PROFILES = {
-    # Keep your full COURSE_PROFILES dict here (truncated in this snippet)
     "UG – Business & Management": {
         "examples": "Business Administration; Accounting & Finance; Marketing; International Business",
         "extra_tip": "Mention business modules (finance, marketing, strategy) and how they support your career in management or entrepreneurship.",
         "keywords": ["marketing", "finance", "accounting", "strategy", "international business"],
     },
-    # ... all other profiles ...
+    # ... keep all your existing profiles ...
 }
 
-# ------------ CSV-based question loading & balanced set ------------
+# ------------ OpenAI Whisper client ------------
 
-@st.cache_data
-def load_questions_df():
-    base_path = Path(__file__).parent
-    csv_path = base_path / "data" / "questions.csv"
-    df = pd.read_csv(csv_path)
-    return df
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-def build_balanced_question_set(selected_categories, num_questions: int = 10):
-    df = load_questions_df()
-    df = df[df["category"].isin(selected_categories)]
-
-    if df.empty:
-        st.warning("No questions available for the selected categories.")
-        return []
-
-    # Ensure at least one question per category
-    mandatory_rows = []
-    for cat in selected_categories:
-        df_cat = df[df["category"] == cat]
-        if df_cat.empty:
-            continue
-        mandatory_rows.append(
-            df_cat.sample(n=1, random_state=random.randint(0, 1_000_000)).iloc[0]
-        )
-
-    used_ids = {row["id"] for row in mandatory_rows}
-    df_remaining = df[~df["id"].isin(used_ids)]
-
-    remaining_slots = max(0, num_questions - len(mandatory_rows))
-    if remaining_slots > 0 and not df_remaining.empty:
-        extra_rows = df_remaining.sample(
-            n=min(remaining_slots, len(df_remaining)),
-            random_state=random.randint(0, 1_000_000),
-        ).to_dict("records")
-    else:
-        extra_rows = []
-
-    combined = mandatory_rows + extra_rows
-
-    normalized = []
-    for row in combined:
-        if isinstance(row, pd.Series):
-            row = row.to_dict()
-        normalized.append(row)
-
-    # Chronological order: category (in selected order), difficulty (easy→medium→hard), id
-    category_order = {cat: i for i, cat in enumerate(selected_categories)}
-    difficulty_order = {"easy": 1, "medium": 2, "hard": 3}
-
-    normalized.sort(
-        key=lambda r: (
-            category_order.get(str(r.get("category", "")), 99),
-            difficulty_order.get(str(r.get("difficulty", "")).lower(), 99),
-            int(r.get("id", 0)),
-        )
-    )
-
-    questions = [
-        {
-            "id": int(row["id"]),
-            "text": str(row["text"]),
-            "category": str(row["category"]),
-            "difficulty": str(row["difficulty"]),
-        }
-        for row in normalized
-    ]
-    return questions
+def transcribe_audio_bytes(audio_bytes: bytes) -> str:
+    with NamedTemporaryFile(delete=True, suffix=".wav") as temp_file:
+        temp_file.write(audio_bytes)
+        temp_file.flush()
+        with open(temp_file.name, "rb") as audio_file:
+            response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+            )
+    return response.text
 
 # ------------ Helpers ------------
 
 def pick_question():
     idx = st.session_state.idx
-    questions = st.session_state.get("questions", [])
-
-    if idx >= len(questions):
+    if idx >= len(st.session_state.categories):
         st.session_state.completed = True
         return
-
-    q = questions[idx]
-    st.session_state.current_category = q["category"]
-    st.session_state.current_question = q["text"]
+    cat = st.session_state.categories[idx]
+    st.session_state.current_category = cat
+    st.session_state.current_question = random.choice(QUESTION_BANK[cat])
     st.session_state.show_followup = False
     st.session_state.question_start = time.time()
     st.session_state.voice_attempts = []
@@ -310,27 +251,7 @@ def time_left():
     seconds = remaining % 60
     return remaining, f"{minutes:02d}:{seconds:02d}"
 
-# Efficiency score: combine answer score and voice attempts
-def efficiency_score(score: int, voice_attempts: int) -> float:
-    attempts = max(1, voice_attempts)  # avoid divide by zero
-    # Simple formula: score adjusted by attempts; 5/1 is best, 1/3 is worst
-    return round(score / attempts, 2)
-
-# OpenAI Whisper client
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-def transcribe_audio_bytes(audio_bytes: bytes) -> str:
-    with NamedTemporaryFile(delete=True, suffix=".wav") as temp_file:
-        temp_file.write(audio_bytes)
-        temp_file.flush()
-        with open(temp_file.name, "rb") as audio_file:
-            response = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-            )
-    return response.text
-
-# ------------ Sidebar: applicant profile + settings ------------
+# ------------ Sidebar: applicant profile ------------
 
 with st.sidebar:
     st.header("👤 Applicant Profile")
@@ -348,20 +269,6 @@ with st.sidebar:
     s_country = st.text_input("Home Country", value="Nigeria")
     s_experience = st.text_input("Experience", placeholder="e.g. 2 years work or study")
 
-    st.subheader("Interview Settings")
-    available_categories = list(QUESTION_BANK.keys())
-    selected_categories = st.multiselect(
-        "Question categories",
-        available_categories,
-        default=available_categories,
-    )
-    num_questions = st.slider(
-        "Number of questions",
-        min_value=3,
-        max_value=len(available_categories) * 2,
-        value=8,
-    )
-
     c1, c2 = st.columns(2)
     with c1:
         start = st.button("Start Pre-CAS Interview", use_container_width=True, type="primary")
@@ -374,45 +281,35 @@ with st.sidebar:
     if start:
         for k in list(st.session_state.keys()):
             del st.session_state[k]
-
-        if not selected_categories:
-            selected_categories = available_categories
-
-        questions = build_balanced_question_set(
-            selected_categories=selected_categories,
-            num_questions=num_questions,
+        cats = list(QUESTION_BANK.keys())
+        random.shuffle(cats)
+        st.session_state.update(
+            {
+                "started": True,
+                "completed": False,
+                "categories": cats,
+                "idx": 0,
+                "scores": [],
+                "log": [],
+                "show_followup": False,
+                "profile": {
+                    "name": s_name or "Applicant",
+                    "university": s_university or "your university",
+                    "course": s_course or "your course",
+                    "country": s_country or "Nigeria",
+                    "experience": s_experience or "",
+                    "course_track": course_track,
+                },
+                "think_time": DEFAULT_THINK_TIME,
+                "hint_mode": DEFAULT_HINT_MODE,
+                "min_words": DEFAULT_MIN_WORDS,
+            }
         )
+        pick_question()
+        st.rerun()
 
-        if questions:
-            st.session_state.update(
-                {
-                    "started": True,
-                    "completed": False,
-                    "questions": questions,
-                    "idx": 0,
-                    "scores": [],
-                    "log": [],
-                    "show_followup": False,
-                    "profile": {
-                        "name": s_name or "Applicant",
-                        "university": s_university or "your university",
-                        "course": s_course or "your course",
-                        "country": s_country or "Nigeria",
-                        "experience": s_experience or "",
-                        "course_track": course_track,
-                    },
-                    "think_time": DEFAULT_THINK_TIME,
-                    "hint_mode": DEFAULT_HINT_MODE,
-                    "min_words": DEFAULT_MIN_WORDS,
-                }
-            )
-            pick_question()
-            st.rerun()
-        else:
-            st.warning("Unable to build question set. Check questions.csv and categories.")
-
-    # Timer display in sidebar
-    if st.session_state.get("started"):
+    # Sidebar timer display when running
+    if st.session_state.get("started") and not st.session_state.get("completed"):
         remaining, t_str = time_left()
         st.caption(f"Time left this question: {t_str}")
         if remaining == 0:
@@ -442,11 +339,10 @@ with st.expander("How your answers are scored"):
     )
 
 if not st.session_state.get("started"):
-    st.info("Fill in the applicant profile on the left, choose settings, then click 'Start Pre-CAS Interview'.")
+    st.info("Fill in the applicant profile on the left, then click 'Start Pre-CAS Interview'.")
 else:
     if st.session_state.get("completed"):
-        df = pd.DataFrame(st.session_state.log)
-        scores = df["Score"].tolist() if "Score" in df.columns else []
+        scores = st.session_state.scores
         avg = sum(scores) / len(scores) if scores else 0
         v = verdict(avg)
 
@@ -457,6 +353,7 @@ else:
         m3.metric("Average Score", f"{avg:.1f} / 5")
         m4.metric("Verdict", v)
 
+        df = pd.DataFrame(st.session_state.log)
         st.divider()
         st.dataframe(
             df[
@@ -464,8 +361,6 @@ else:
                     "Question #",
                     "Category",
                     "Score",
-                    "Voice Attempts",
-                    "Efficiency Score",
                     "Feedback",
                     "Tip",
                     "Generic Positives",
@@ -475,18 +370,6 @@ else:
             use_container_width=True,
             hide_index=True,
         )
-
-        # Soft suggestion based on voice attempt usage
-        if "Voice Attempts" in df.columns:
-            max_attempts_used = (df["Voice Attempts"] >= MAX_VOICE_ATTEMPTS).sum()
-            total_questions = len(df)
-
-            if max_attempts_used >= max(1, total_questions // 3):
-                st.warning(
-                    f"You used the maximum {MAX_VOICE_ATTEMPTS} voice attempts on "
-                    f"{max_attempts_used} out of {total_questions} questions. "
-                    "In real interviews, try to give a strong answer within 1–2 attempts."
-                )
 
         weak = df[df["Score"] <= 2]
         if not weak.empty:
@@ -498,13 +381,6 @@ else:
                     st.write(f"**Answer:** {row['Answer']}")
                     st.error(f"**Feedback:** {row['Feedback']}")
                     st.info(f"**Tip:** {row['Tip']}")
-                    attempts_used = int(row.get("Voice Attempts", 0))
-                    st.caption(f"Voice attempts used: {attempts_used} / {MAX_VOICE_ATTEMPTS}")
-                    if attempts_used == MAX_VOICE_ATTEMPTS:
-                        st.caption(
-                            "Note: You needed all 3 attempts here. "
-                            "Next time, aim to structure your answer clearly from the first recording."
-                        )
 
         csv = df.to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -515,11 +391,13 @@ else:
         )
 
     else:
-        questions = st.session_state.questions
+        categories = st.session_state.categories
         idx = st.session_state.idx
-        total_q = len(questions)
+        total_q = len(categories)
 
+        remaining, t_str = time_left()
         st.progress(idx / total_q, text=f"Question {idx + 1} of {total_q}")
+        st.caption(f"Time left for this question: {t_str}")
 
         left, right = st.columns([2, 1])
 
@@ -542,7 +420,7 @@ else:
                     )
                 )
 
-            # Prime Crown course cluster tip
+            # Course cluster tip
             course_track = st.session_state.profile.get("course_track")
             if course_track and course_track in COURSE_PROFILES:
                 cluster = COURSE_PROFILES[course_track]
@@ -551,12 +429,11 @@ else:
                     f"{cluster['extra_tip']} Example programmes include: {cluster['examples']}."
                 )
 
-            remaining, _ = time_left()
-
+            # Voice recording block
             if "voice_attempts" not in st.session_state:
                 st.session_state.voice_attempts = []
 
-            st.subheader("Record your answer (optional)")
+            st.subheader("Record your answer")
 
             current_attempts = len(st.session_state.voice_attempts)
             if current_attempts > 0:
@@ -571,8 +448,7 @@ else:
                         with st.spinner("Transcribing..."):
                             text_ans = transcribe_audio_bytes(audio_bytes)
                         st.session_state.voice_attempts.append({"audio": audio_bytes, "text": text_ans})
-                        st.success("Recording transcribed. You can edit it below.")
-                        st.session_state[f"ans_{idx}"] = text_ans
+                        st.success("Recording transcribed. This will be used as your answer.")
                         st.experimental_rerun()
             else:
                 if remaining == 0:
@@ -580,28 +456,23 @@ else:
                 elif current_attempts >= MAX_VOICE_ATTEMPTS:
                     st.warning("You have reached the maximum of 3 voice attempts for this question.")
 
-            if current_attempts > 0:
-                st.caption(f"Voice attempts used so far: {current_attempts} / {MAX_VOICE_ATTEMPTS}.")
+            if remaining == 0 and not st.session_state.voice_attempts:
+                st.warning("Time is up and no recording was submitted for this question.")
 
-            if remaining == 0:
-                st.warning("Time is up for this question. You can review, but no new recordings.")
-
+            # We base scoring purely on the latest recorded transcript
             if not st.session_state.show_followup:
-                answer = st.text_area(
-                    "Your answer",
-                    height=170,
-                    key=f"ans_{idx}",
-                    placeholder="Answer as you would in a real Pre-CAS interview.",
-                )
                 if st.button("Submit Answer →", type="primary", use_container_width=True):
-                    if answer.strip():
-                        wc = len(answer.strip().split())
+                    if not st.session_state.voice_attempts:
+                        st.warning("Please record and transcribe an answer before submitting.")
+                    else:
+                        answer_text = st.session_state.voice_attempts[-1]["text"]
+                        wc = len(answer_text.strip().split())
                         if wc < st.session_state.get("min_words", 20):
                             st.warning(
                                 f"Your answer is quite short ({wc} words). "
                                 f"Aim for at least {st.session_state.get('min_words', 20)} words."
                             )
-                        result = fallback_score(answer.strip())
+                        result = fallback_score(answer_text.strip())
 
                         st.success(f"Score: {result['score']}/5 — {result['feedback']}")
                         st.caption(
@@ -609,19 +480,14 @@ else:
                             f"{result.get('cluster_hits', 0)} course-cluster keywords."
                         )
 
-                        voice_attempts_count = len(st.session_state.voice_attempts)
-                        eff = efficiency_score(result["score"], voice_attempts_count)
-
                         st.session_state.scores.append(result["score"])
                         st.session_state.log.append(
                             {
                                 "Question #": idx + 1,
                                 "Category": st.session_state.current_category,
                                 "Question": st.session_state.current_question,
-                                "Answer": answer.strip(),
+                                "Answer": answer_text.strip(),
                                 "Score": result["score"],
-                                "Efficiency Score": eff,
-                                "Voice Attempts": voice_attempts_count,
                                 "Feedback": result["feedback"],
                                 "Tip": result["tip"],
                                 "Red Flag": result.get("red_flag", False),
@@ -640,8 +506,6 @@ else:
                             st.session_state.idx += 1
                             pick_question()
                             st.rerun()
-                    else:
-                        st.warning("Please enter your answer before submitting.")
             else:
                 r = st.session_state.last_result
                 stars = "★" * r["score"] + "☆" * (5 - r["score"])
@@ -657,13 +521,9 @@ else:
                     if follow.strip() and len(follow.split()) >= 20:
                         new_score = min(r["score"] + 1, 4)
                         st.session_state.scores[-1] = new_score
-                        # Recompute efficiency for this question
-                        last_attempts = st.session_state.log[-1].get("Voice Attempts", 1)
-                        new_eff = efficiency_score(new_score, last_attempts)
                         st.session_state.log[-1].update(
                             {
                                 "Score": new_score,
-                                "Efficiency Score": new_eff,
                                 "Feedback": "Follow-up accepted — credibility partially recovered.",
                             }
                         )
@@ -678,17 +538,13 @@ else:
             st.subheader("Live Scores")
             for i, sc in enumerate(st.session_state.scores):
                 bar = "█" * sc + "░" * (5 - sc)
+                cat = categories[i] if i < len(categories) else ""
                 row = st.session_state.log[i]
-                cat = row.get("Category", "")
                 flag = " 🚩" if row.get("Red Flag") else ""
                 gp = row.get("Generic Positives", 0)
                 ch = row.get("Cluster Hits", 0)
-                eff = row.get("Efficiency Score", 0)
                 st.markdown(f"`Q{i+1}` {bar} **{sc}/5**{flag} \n_{cat}_")
-                st.caption(
-                    f"Signals: {gp} generic positives, {ch} cluster hits. "
-                    f"Efficiency: {eff} (higher is better)."
-                )
+                st.caption(f"Signals: {gp} generic positives, {ch} cluster hits.")
 
             st.divider()
             p = st.session_state.profile
