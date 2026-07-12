@@ -1,15 +1,11 @@
 import time
-from tempfile import NamedTemporaryFile
 
+import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
-import pandas as pd
-from openai import OpenAI
-from audio_recorder_streamlit import audio_recorder
 
 from advisors_theme import apply_advisors_theme
 
-# Page config
 st.set_page_config(
     page_title="Advisors Academy Pre-CAS Interview",
     page_icon="🎓",
@@ -128,7 +124,6 @@ DEFAULT_THINK_TIME = 3
 DEFAULT_HINT_MODE = True
 DEFAULT_MIN_WORDS = 20
 QUESTION_TIME_SECONDS = 3 * 60
-MAX_VOICE_ATTEMPTS = 3
 
 COURSE_PROFILES = {
     "UG – Business & Management": {
@@ -145,21 +140,6 @@ QUESTION_SEQUENCE = [
     for question in questions
 ]
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-
-def transcribe_audio_bytes(audio_bytes: bytes) -> str:
-    with NamedTemporaryFile(delete=True, suffix=".wav") as temp_file:
-        temp_file.write(audio_bytes)
-        temp_file.flush()
-        with open(temp_file.name, "rb") as audio_file:
-            response = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                language="en",
-            )
-    return response.text
-
 
 def pick_question():
     idx = st.session_state.idx
@@ -172,9 +152,6 @@ def pick_question():
     st.session_state.show_followup = False
     st.session_state.question_start = time.time()
     st.session_state.question_closed = False
-    st.session_state.voice_attempts = []
-    st.session_state.latest_audio = None
-    st.session_state.latest_transcript = ""
     st.session_state.auto_advanced = False
 
 
@@ -336,7 +313,7 @@ with st.sidebar:
     approx_minutes = total_sections * 3
     st.caption(
         f"Estimated interview duration: about {approx_minutes} minutes "
-        f"({total_sections} questions in chronological order, ~3 minutes each)."
+        f"({total_sections} question-bank questions in fixed order, ~3 minutes each)."
     )
 
     if start:
@@ -400,7 +377,7 @@ if not st.session_state.get("started"):
     approx_minutes = total_sections * 3
     st.info(
         f"Fill in the applicant profile on the left, then click 'Start Pre-CAS Interview'. "
-        f"Estimated duration: about {approx_minutes} minutes for {total_sections} questions."
+        f"Estimated duration: about {approx_minutes} minutes for {total_sections} fixed question-bank questions."
     )
 else:
     if st.session_state.get("completed"):
@@ -493,48 +470,19 @@ else:
                     f"{cluster['extra_tip']} Example programmes include: {cluster['examples']}."
                 )
 
-            st.subheader("Record your answer")
+            st.subheader("Type your answer")
+            answer_key = f"answer_{idx}"
+            answer_text = st.text_area(
+                "Your answer",
+                value=st.session_state.get(answer_key, ""),
+                height=180,
+                key=answer_key,
+                placeholder="Type your answer here...",
+                disabled=st.session_state.question_closed and not st.session_state.show_followup,
+            )
 
-            current_attempts = len(st.session_state.voice_attempts)
-            if current_attempts > 0:
-                st.caption(
-                    f"{current_attempts} recorded attempt(s). Maximum allowed: {MAX_VOICE_ATTEMPTS}."
-                )
-
-            can_record = current_attempts < MAX_VOICE_ATTEMPTS and not st.session_state.question_closed
-            if can_record:
-                st.caption("Click record, speak, then stop. You can still transcribe captured audio after time runs out.")
-                audio_bytes = audio_recorder(pause_threshold=30, key=f"audio_{idx}_{current_attempts}")
-                if audio_bytes:
-                    st.session_state.latest_audio = audio_bytes
-            else:
-                if remaining == 0:
-                    st.warning("Time is up for this question. No new recordings allowed, but you can still transcribe any captured audio below.")
-                elif current_attempts >= MAX_VOICE_ATTEMPTS:
-                    st.warning("You have reached the maximum of 3 voice attempts for this question.")
-
-            if st.session_state.latest_audio:
-                st.audio(st.session_state.latest_audio, format="audio/wav")
-                if st.button("Transcribe this recording", use_container_width=True):
-                    with st.spinner("Transcribing..."):
-                        text_ans = transcribe_audio_bytes(st.session_state.latest_audio)
-                    st.session_state.latest_transcript = text_ans
-                    st.session_state.voice_attempts.append(
-                        {"audio": st.session_state.latest_audio, "text": text_ans}
-                    )
-                    st.success("Recording transcribed. This will be used as your answer.")
-                    st.rerun()
-
-            if st.session_state.latest_transcript:
-                st.text_area(
-                    "Transcribed answer",
-                    st.session_state.latest_transcript,
-                    height=120,
-                    disabled=True,
-                )
-
-            if remaining == 0 and not st.session_state.voice_attempts and not st.session_state.latest_audio:
-                st.warning("Time is up and no recording was submitted for this question.")
+            if remaining == 0 and not answer_text.strip():
+                st.warning("Time is up and no answer was submitted for this question.")
                 if not st.session_state.get("auto_advanced", False):
                     st.session_state.auto_advanced = True
                     st.session_state.scores.append(1)
@@ -558,10 +506,9 @@ else:
 
             if not st.session_state.show_followup:
                 if st.button("Submit Answer →", type="primary", use_container_width=True):
-                    if not st.session_state.voice_attempts:
-                        st.warning("Please record and transcribe an answer before submitting.")
+                    if not answer_text.strip():
+                        st.warning("Please type an answer before submitting.")
                     else:
-                        answer_text = st.session_state.voice_attempts[-1]["text"]
                         submit_current_answer(answer_text, idx)
             else:
                 r = st.session_state.last_result
