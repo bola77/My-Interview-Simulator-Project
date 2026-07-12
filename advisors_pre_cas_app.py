@@ -119,7 +119,7 @@ POSITIVE = [
 DEFAULT_THINK_TIME = 3
 DEFAULT_HINT_MODE = True
 DEFAULT_MIN_WORDS = 20
-QUESTION_TIME_SECONDS = 5 * 60  # 5 minutes per question
+QUESTION_TIME_SECONDS = 3 * 60  # 3 minutes per question
 MAX_VOICE_ATTEMPTS = 3
 
 # ------------ Prime Crown UK course clusters (truncated here, keep your full dict) ------------
@@ -285,6 +285,14 @@ with st.sidebar:
             for k in list(st.session_state.keys()):
                 del st.session_state[k]
             st.rerun()
+            # Estimated interview duration
+total_sections = len(QUESTION_BANK)  # currently 8 main CAS areas
+approx_minutes = total_sections * 3  # 3 minutes per question
+
+st.caption(
+    f"Estimated interview duration: about {approx_minutes} minutes "
+    f"({total_sections} core CAS question areas, ~3 minutes each)."
+)
 
     if start:
         for k in list(st.session_state.keys()):
