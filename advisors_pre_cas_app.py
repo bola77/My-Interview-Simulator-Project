@@ -10,6 +10,18 @@ from openai import OpenAI
 from audio_recorder_streamlit import audio_recorder  # or your chosen recorder
 
 from advisors_theme import apply_advisors_theme
+
+
+# Page config
+st.set_page_config(
+    page_title="Advisors Academy Pre-CAS Interview",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+apply_advisors_theme()
+
 st.markdown(
     """
     <style>
@@ -32,16 +44,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-# Page config
-st.set_page_config(
-    page_title="Advisors Academy Pre-CAS Interview",
-    page_icon="🎓",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-apply_advisors_theme()
 
 # ------------ Question bank & hints ------------
 
