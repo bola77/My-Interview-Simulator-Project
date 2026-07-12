@@ -286,13 +286,11 @@ with st.sidebar:
                 del st.session_state[k]
             st.rerun()
             # Estimated interview duration
-total_sections = len(QUESTION_BANK)  # currently 8 main CAS areas
-approx_minutes = total_sections * 3  # 3 minutes per question
-
-st.caption(
-    f"Estimated interview duration: about {approx_minutes} minutes "
-    f"({total_sections} core CAS question areas, ~3 minutes each)."
-)
+        if st.session_state.get("started") and not st.session_state.get("completed"):
+            remaining, t_str = time_left()
+            st.caption(f"Time left this question: {t_str}")
+            if remaining == 0:
+                st.warning("Time is up for this question!")
 
     if start:
         for k in list(st.session_state.keys()):
