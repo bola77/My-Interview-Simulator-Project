@@ -1,16 +1,13 @@
-import random
 import time
-from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 from openai import OpenAI
-from audio_recorder_streamlit import audio_recorder  # or your chosen recorder
+from audio_recorder_streamlit import audio_recorder
 
 from advisors_theme import apply_advisors_theme
-
 
 # Page config
 st.set_page_config(
@@ -25,27 +22,14 @@ apply_advisors_theme()
 st.markdown(
     """
     <style>
-    .stAppDeployButton, .stDeployButton {
-        display: none;
-    }
-
-    div[data-testid="stToolbar"] {
-        display: none;
-    }
-
-    header[data-testid="stHeader"] {
-        display: none;
-    }
-
-    #MainMenu {
-        visibility: hidden;
-    }
+    .stAppDeployButton, .stDeployButton { display: none; }
+    div[data-testid="stToolbar"] { display: none; }
+    header[data-testid="stHeader"] { display: none; }
+    #MainMenu { visibility: hidden; }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
-# ------------ Question bank & hints ------------
 
 QUESTION_BANK = {
     "Study destination": [
@@ -143,10 +127,8 @@ POSITIVE = [
 DEFAULT_THINK_TIME = 3
 DEFAULT_HINT_MODE = True
 DEFAULT_MIN_WORDS = 20
-QUESTION_TIME_SECONDS = 3 * 60  # 3 minutes per question
+QUESTION_TIME_SECONDS = 3 * 60
 MAX_VOICE_ATTEMPTS = 3
-
-# ------------ Prime Crown UK course clusters (truncated here, keep your full dict) ------------
 
 COURSE_PROFILES = {
     "UG – Business & Management": {
@@ -157,9 +139,14 @@ COURSE_PROFILES = {
     # ... keep all your existing profiles ...
 }
 
-# ------------ OpenAI Whisper client ------------
+QUESTION_SEQUENCE = [
+    {"category": category, "question": question}
+    for category, questions in QUESTION_BANK.items()
+    for question in questions
+]
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
 
 def transcribe_audio_bytes(audio_bytes: bytes) -> str:
     with NamedTemporaryFile(delete=True, suffix=".wav") as temp_file:
@@ -169,23 +156,27 @@ def transcribe_audio_bytes(audio_bytes: bytes) -> str:
             response = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
-                language="en",  # optional, improves accuracy for English
+                language="en",
             )
     return response.text
 
-# ------------ Helpers ------------
 
 def pick_question():
     idx = st.session_state.idx
-    if idx >= len(st.session_state.categories):
+    if idx >= len(st.session_state.question_sequence):
         st.session_state.completed = True
         return
-    cat = st.session_state.categories[idx]
-    st.session_state.current_category = cat
-    st.session_state.current_question = random.choice(QUESTION_BANK[cat])
+    item = st.session_state.question_sequence[idx]
+    st.session_state.current_category = item["category"]
+    st.session_state.current_question = item["question"]
     st.session_state.show_followup = False
     st.session_state.question_start = time.time()
+    st.session_state.question_closed = False
     st.session_state.voice_attempts = []
+    st.session_state.latest_audio = None
+    st.session_state.latest_transcript = ""
+    st.session_state.auto_advanced = False
+
 
 def verdict(avg: float) -> str:
     if avg >= 4.5:
@@ -196,10 +187,9 @@ def verdict(avg: float) -> str:
         return "🟠 At risk — more practice needed"
     return "🔴 High risk — urgent coaching required"
 
+
 def fallback_score(answer: str) -> dict:
     lower = answer.lower()
-
-    # 1. Hard red flags
     for f in RED_FLAGS:
         if f in lower:
             return {
@@ -211,23 +201,14 @@ def fallback_score(answer: str) -> dict:
                 "cluster_hits": 0,
             }
 
-    # 2. Generic positives
     generic_pos = sum(1 for p in POSITIVE if p in lower)
-
-    # 3. Course-cluster-specific keywords
-    course_track = (
-        st.session_state.profile.get("course_track")
-        if "profile" in st.session_state
-        else None
-    )
+    course_track = st.session_state.profile.get("course_track") if "profile" in st.session_state else None
     cluster_hits = 0
     if course_track and course_track in COURSE_PROFILES:
         keywords = COURSE_PROFILES[course_track].get("keywords", [])
         cluster_hits = sum(1 for kw in keywords if kw.lower() in lower)
 
     wc = len(answer.split())
-
-    # Base score from length + generic positives
     s = 2
     if wc < 15:
         s = 2
@@ -238,7 +219,6 @@ def fallback_score(answer: str) -> dict:
     elif generic_pos >= 1 and wc >= 25:
         s = 3
 
-    # Boost if student uses course-cluster language
     if cluster_hits >= 2 and s <= 4:
         s += 1
     elif cluster_hits == 1 and s <= 3:
@@ -266,12 +246,14 @@ def fallback_score(answer: str) -> dict:
         "cluster_hits": cluster_hits,
     }
 
+
 def countdown_box(seconds: int, label: str = "Next question"):
     box = st.empty()
     for s in range(seconds, 0, -1):
         box.warning(f"{label} in {s} second{'s' if s != 1 else ''}...")
         time.sleep(1)
     box.empty()
+
 
 def time_left():
     start = st.session_state.get("question_start", time.time())
@@ -281,13 +263,55 @@ def time_left():
     seconds = remaining % 60
     return remaining, f"{minutes:02d}:{seconds:02d}"
 
-# ------------ Sidebar: applicant profile ------------
+
+def submit_current_answer(answer_text: str, idx: int):
+    wc = len(answer_text.strip().split())
+    if wc < st.session_state.get("min_words", 20):
+        st.warning(
+            f"Your answer is quite short ({wc} words). "
+            f"Aim for at least {st.session_state.get('min_words', 20)} words."
+        )
+    result = fallback_score(answer_text.strip())
+
+    st.success(f"Score: {result['score']}/5 — {result['feedback']}")
+    st.caption(
+        f"Signals detected: {result.get('generic_pos', 0)} generic positives, "
+        f"{result.get('cluster_hits', 0)} course-cluster keywords."
+    )
+
+    st.session_state.scores.append(result["score"])
+    st.session_state.log.append(
+        {
+            "Question #": idx + 1,
+            "Category": st.session_state.current_category,
+            "Question": st.session_state.current_question,
+            "Answer": answer_text.strip(),
+            "Score": result["score"],
+            "Feedback": result["feedback"],
+            "Tip": result["tip"],
+            "Red Flag": result.get("red_flag", False),
+            "Generic Positives": result.get("generic_pos", 0),
+            "Cluster Hits": result.get("cluster_hits", 0),
+        }
+    )
+
+    if result["score"] <= 2:
+        st.session_state.show_followup = True
+        st.session_state.last_result = result
+    else:
+        wait_s = int(st.session_state.get("think_time", 0))
+        if wait_s > 0:
+            countdown_box(wait_s, label="Next question")
+        st.session_state.idx += 1
+        pick_question()
+        st.rerun()
+
 
 with st.sidebar:
     st.header("👤 Applicant Profile")
 
     course_track = st.selectbox(
-        "Course track ( UK list)",
+        "Course track (UK list)",
         list(COURSE_PROFILES.keys()),
         index=0,
         help="Choose the closest cluster for your UK course.",
@@ -301,31 +325,28 @@ with st.sidebar:
 
     c1, c2 = st.columns(2)
     with c1:
-        start = st.button(
-            "Start Pre-CAS Interview", use_container_width=True, type="primary"
-        )
+        start = st.button("Start Pre-CAS Interview", use_container_width=True, type="primary")
     with c2:
         if st.button("Reset Session", use_container_width=True):
             for k in list(st.session_state.keys()):
                 del st.session_state[k]
             st.rerun()
-            # Estimated interview duration
-        if st.session_state.get("started") and not st.session_state.get("completed"):
-            remaining, t_str = time_left()
-            st.caption(f"Time left this question: {t_str}")
-            if remaining == 0:
-                st.warning("Time is up for this question!")
+
+    total_sections = len(QUESTION_SEQUENCE)
+    approx_minutes = total_sections * 3
+    st.caption(
+        f"Estimated interview duration: about {approx_minutes} minutes "
+        f"({total_sections} questions in chronological order, ~3 minutes each)."
+    )
 
     if start:
         for k in list(st.session_state.keys()):
             del st.session_state[k]
-        cats = list(QUESTION_BANK.keys())
-        random.shuffle(cats)
         st.session_state.update(
             {
                 "started": True,
                 "completed": False,
-                "categories": cats,
+                "question_sequence": QUESTION_SEQUENCE,
                 "idx": 0,
                 "scores": [],
                 "log": [],
@@ -346,14 +367,11 @@ with st.sidebar:
         pick_question()
         st.rerun()
 
-    # Sidebar timer display when running
     if st.session_state.get("started") and not st.session_state.get("completed"):
         remaining, t_str = time_left()
         st.caption(f"Time left this question: {t_str}")
         if remaining == 0:
             st.warning("Time is up for this question!")
-
-# ------------ Main UI ------------
 
 st.title("Advisors Academy Pre-CAS Interview")
 st_autorefresh(interval=1000, key="timer_refresh")
@@ -378,8 +396,11 @@ with st.expander("How your answers are scored"):
     )
 
 if not st.session_state.get("started"):
+    total_sections = len(QUESTION_SEQUENCE)
+    approx_minutes = total_sections * 3
     st.info(
-        "Fill in the applicant profile on the left, then click 'Start Pre-CAS Interview'."
+        f"Fill in the applicant profile on the left, then click 'Start Pre-CAS Interview'. "
+        f"Estimated duration: about {approx_minutes} minutes for {total_sections} questions."
     )
 else:
     if st.session_state.get("completed"):
@@ -417,9 +438,7 @@ else:
             st.divider()
             st.subheader("⚠️ Areas to Improve Before CAS")
             for _, row in weak.iterrows():
-                with st.expander(
-                    f"Q{int(row['Question #'])} — {row['Category']} ({int(row['Score'])}/5)"
-                ):
+                with st.expander(f"Q{int(row['Question #'])} — {row['Category']} ({int(row['Score'])}/5)"):
                     st.write(f"**Question:** {row['Question']}")
                     st.write(f"**Answer:** {row['Answer']}")
                     st.error(f"**Feedback:** {row['Feedback']}")
@@ -434,12 +453,16 @@ else:
         )
 
     else:
-        categories = st.session_state.categories
+        categories = [item["category"] for item in st.session_state.question_sequence]
         idx = st.session_state.idx
-        total_q = len(categories)
+        total_q = len(st.session_state.question_sequence)
 
         remaining, t_str = time_left()
         st.progress(idx / total_q, text=f"Question {idx + 1} of {total_q}")
+        st.caption(f"Time left for this question: {t_str}")
+
+        if remaining == 0:
+            st.session_state.question_closed = True
 
         left, right = st.columns([2, 1])
 
@@ -462,7 +485,6 @@ else:
                     )
                 )
 
-            # Course cluster tip
             course_track = st.session_state.profile.get("course_track")
             if course_track and course_track in COURSE_PROFILES:
                 cluster = COURSE_PROFILES[course_track]
@@ -470,10 +492,6 @@ else:
                     f"Course cluster hint ({course_track}): "
                     f"{cluster['extra_tip']} Example programmes include: {cluster['examples']}."
                 )
-
-            # Voice recording block
-            if "voice_attempts" not in st.session_state:
-                st.session_state.voice_attempts = []
 
             st.subheader("Record your answer")
 
@@ -483,110 +501,80 @@ else:
                     f"{current_attempts} recorded attempt(s). Maximum allowed: {MAX_VOICE_ATTEMPTS}."
                 )
 
-            if current_attempts < MAX_VOICE_ATTEMPTS and remaining > 0:
-                audio_bytes = audio_recorder(pause_threshold=30)
-
+            can_record = current_attempts < MAX_VOICE_ATTEMPTS and not st.session_state.question_closed
+            if can_record:
+                st.caption("Click record, speak, then stop. You can still transcribe captured audio after time runs out.")
+                audio_bytes = audio_recorder(pause_threshold=30, key=f"audio_{idx}_{current_attempts}")
                 if audio_bytes:
-                    st.audio(audio_bytes, format="audio/wav")
-                    if st.button("Transcribe this recording"):
-                        with st.spinner("Transcribing..."):
-                            text_ans = transcribe_audio_bytes(audio_bytes)
-                        st.session_state.voice_attempts.append(
-                            {"audio": audio_bytes, "text": text_ans}
-                        )
-                        st.success(
-                            "Recording transcribed. This will be used as your answer."
-                        )
-                        # Show transcript back to student
-                        st.text_area(
-                            "Transcribed answer",
-                            text_ans,
-                            height=120,
-                            disabled=True,
-                        )
-                        st.experimental_rerun()
+                    st.session_state.latest_audio = audio_bytes
             else:
                 if remaining == 0:
-                    st.warning(
-                        "Time is up for this question. No new recordings allowed."
-                    )
+                    st.warning("Time is up for this question. No new recordings allowed, but you can still transcribe any captured audio below.")
                 elif current_attempts >= MAX_VOICE_ATTEMPTS:
-                    st.warning(
-                        "You have reached the maximum of 3 voice attempts for this question."
-                    )
+                    st.warning("You have reached the maximum of 3 voice attempts for this question.")
 
-            if remaining == 0 and not st.session_state.voice_attempts:
-                st.warning(
-                    "Time is up and no recording was submitted for this question."
+            if st.session_state.latest_audio:
+                st.audio(st.session_state.latest_audio, format="audio/wav")
+                if st.button("Transcribe this recording", use_container_width=True):
+                    with st.spinner("Transcribing..."):
+                        text_ans = transcribe_audio_bytes(st.session_state.latest_audio)
+                    st.session_state.latest_transcript = text_ans
+                    st.session_state.voice_attempts.append(
+                        {"audio": st.session_state.latest_audio, "text": text_ans}
+                    )
+                    st.success("Recording transcribed. This will be used as your answer.")
+                    st.rerun()
+
+            if st.session_state.latest_transcript:
+                st.text_area(
+                    "Transcribed answer",
+                    st.session_state.latest_transcript,
+                    height=120,
+                    disabled=True,
                 )
 
-            # We base scoring purely on the latest recorded transcript
+            if remaining == 0 and not st.session_state.voice_attempts and not st.session_state.latest_audio:
+                st.warning("Time is up and no recording was submitted for this question.")
+                if not st.session_state.get("auto_advanced", False):
+                    st.session_state.auto_advanced = True
+                    st.session_state.scores.append(1)
+                    st.session_state.log.append(
+                        {
+                            "Question #": idx + 1,
+                            "Category": st.session_state.current_category,
+                            "Question": st.session_state.current_question,
+                            "Answer": "",
+                            "Score": 1,
+                            "Feedback": "No answer submitted before time expired.",
+                            "Tip": "Give a direct answer within the time allowed.",
+                            "Red Flag": False,
+                            "Generic Positives": 0,
+                            "Cluster Hits": 0,
+                        }
+                    )
+                    st.session_state.idx += 1
+                    pick_question()
+                    st.rerun()
+
             if not st.session_state.show_followup:
                 if st.button("Submit Answer →", type="primary", use_container_width=True):
                     if not st.session_state.voice_attempts:
-                        st.warning(
-                            "Please record and transcribe an answer before submitting."
-                        )
+                        st.warning("Please record and transcribe an answer before submitting.")
                     else:
                         answer_text = st.session_state.voice_attempts[-1]["text"]
-                        wc = len(answer_text.strip().split())
-                        if wc < st.session_state.get("min_words", 20):
-                            st.warning(
-                                f"Your answer is quite short ({wc} words). "
-                                f"Aim for at least {st.session_state.get('min_words', 20)} words."
-                            )
-                        result = fallback_score(answer_text.strip())
-
-                        st.success(
-                            f"Score: {result['score']}/5 — {result['feedback']}"
-                        )
-                        st.caption(
-                            f"Signals detected: {result.get('generic_pos', 0)} generic positives, "
-                            f"{result.get('cluster_hits', 0)} course-cluster keywords."
-                        )
-
-                        st.session_state.scores.append(result["score"])
-                        st.session_state.log.append(
-                            {
-                                "Question #": idx + 1,
-                                "Category": st.session_state.current_category,
-                                "Question": st.session_state.current_question,
-                                "Answer": answer_text.strip(),
-                                "Score": result["score"],
-                                "Feedback": result["feedback"],
-                                "Tip": result["tip"],
-                                "Red Flag": result.get("red_flag", False),
-                                "Generic Positives": result.get("generic_pos", 0),
-                                "Cluster Hits": result.get("cluster_hits", 0),
-                            }
-                        )
-
-                        if result["score"] <= 2:
-                            st.session_state.show_followup = True
-                            st.session_state.last_result = result
-                        else:
-                            wait_s = int(st.session_state.get("think_time", 0))
-                            if wait_s > 0:
-                                countdown_box(wait_s, label="Next question")
-                            st.session_state.idx += 1
-                            pick_question()
-                            st.rerun()
+                        submit_current_answer(answer_text, idx)
             else:
                 r = st.session_state.last_result
                 stars = "★" * r["score"] + "☆" * (5 - r["score"])
                 st.error(f"Score: {stars} ({r['score']}/5) — {r['feedback']}")
-                st.warning(
-                    f"🔍 Follow-up: {FOLLOW_UPS[st.session_state.current_category]}"
-                )
+                st.warning(f"🔍 Follow-up: {FOLLOW_UPS[st.session_state.current_category]}")
                 follow = st.text_area(
                     "Follow-up answer",
                     height=130,
                     key=f"follow_{idx}",
                     placeholder="Provide more specific details to recover credibility…",
                 )
-                if st.button(
-                    "Submit Follow-up →", type="primary", use_container_width=True
-                ):
+                if st.button("Submit Follow-up →", type="primary", use_container_width=True):
                     if follow.strip() and len(follow.split()) >= 20:
                         new_score = min(r["score"] + 1, 4)
                         st.session_state.scores[-1] = new_score
@@ -601,15 +589,11 @@ else:
                         pick_question()
                         st.rerun()
                     else:
-                        st.warning(
-                            "Please provide a sufficiently detailed follow-up (at least 20 words)."
-                        )
+                        st.warning("Please provide a sufficiently detailed follow-up (at least 20 words).")
 
         with right:
-            # Big, colour-coded ticking timer
             st.markdown("### Time left")
 
-            # Choose colour based on remaining seconds
             if remaining > 60:
                 timer_color = "green"
             elif remaining > 30:
@@ -623,7 +607,7 @@ else:
                 unsafe_allow_html=True,
             )
 
-            if remaining <= 30:
+            if remaining <= 30 and remaining > 0:
                 st.warning("Less than 30 seconds remaining for this question.")
 
             st.subheader("Live Scores")
