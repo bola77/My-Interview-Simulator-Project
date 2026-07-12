@@ -10,6 +10,28 @@ from openai import OpenAI
 from audio_recorder_streamlit import audio_recorder  # or your chosen recorder
 
 from advisors_theme import apply_advisors_theme
+st.markdown(
+    """
+    <style>
+    .stAppDeployButton, .stDeployButton {
+        display: none;
+    }
+
+    div[data-testid="stToolbar"] {
+        display: none;
+    }
+
+    header[data-testid="stHeader"] {
+        display: none;
+    }
+
+    #MainMenu {
+        visibility: hidden;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Page config
 st.set_page_config(
