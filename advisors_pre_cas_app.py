@@ -1,7 +1,10 @@
+import json
 import time
+import random
 
 import pandas as pd
 import streamlit as st
+from openai import OpenAI
 from streamlit_autorefresh import st_autorefresh
 
 from advisors_theme import apply_advisors_theme
@@ -134,11 +137,14 @@ COURSE_PROFILES = {
     # ... keep all your existing profiles ...
 }
 
-QUESTION_SEQUENCE = [
-    {"category": category, "question": question}
-    for category, questions in QUESTION_BANK.items()
-    for question in questions
-]
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+
+def build_one_question_per_category():
+    sequence = []
+    for category, questions in QUESTION_BANK.items():
+        sequence.append({"category": category, "question": random.choice(questions)})
+    return sequence
 
 
 def pick_question():
@@ -165,71 +171,14 @@ def verdict(avg: float) -> str:
     return "🔴 High risk — urgent coaching required"
 
 
-def fallback_score(answer: str) -> dict:
-    lower = answer.lower()
-    for f in RED_FLAGS:
-        if f in lower:
-            return {
-                "score": 1,
-                "feedback": f"Red flag detected: '{f}'.",
-                "tip": "Avoid immigration-focused, unclear or agent-led language.",
-                "red_flag": True,
-                "generic_pos": 0,
-                "cluster_hits": 0,
-            }
-
-    generic_pos = sum(1 for p in POSITIVE if p in lower)
-    course_track = st.session_state.profile.get("course_track") if "profile" in st.session_state else None
-    cluster_hits = 0
-    if course_track and course_track in COURSE_PROFILES:
-        keywords = COURSE_PROFILES[course_track].get("keywords", [])
-        cluster_hits = sum(1 for kw in keywords if kw.lower() in lower)
-
-    wc = len(answer.split())
-    s = 2
-    if wc < 15:
-        s = 2
-    elif generic_pos >= 4 and wc >= 60:
-        s = 5
-    elif generic_pos >= 2 and wc >= 40:
-        s = 4
-    elif generic_pos >= 1 and wc >= 25:
-        s = 3
-
-    if cluster_hits >= 2 and s <= 4:
-        s += 1
-    elif cluster_hits == 1 and s <= 3:
-        s += 1
-
-    s = max(1, min(s, 5))
-
-    msgs = {
-        5: "Excellent — specific and aligned with your chosen course.",
-        4: "Good — add one more concrete detail about your course or university.",
-        3: "Average — bring in more course or module details.",
-        2: "Weak — too vague or generic.",
-    }
-
-    tip = "Mention relevant modules, course outcomes, and how they support your career."
-    if course_track and course_track in COURSE_PROFILES:
-        tip = COURSE_PROFILES[course_track]["extra_tip"]
-
-    return {
-        "score": s,
-        "feedback": msgs.get(s, "Response evaluated."),
-        "tip": tip,
-        "red_flag": False,
-        "generic_pos": generic_pos,
-        "cluster_hits": cluster_hits,
-    }
-
-
-def countdown_box(seconds: int, label: str = "Next question"):
-    box = st.empty()
-    for s in range(seconds, 0, -1):
-        box.warning(f"{label} in {s} second{'s' if s != 1 else ''}...")
-        time.sleep(1)
-    box.empty()
+def counsellor_risk(avg: float) -> str:
+    if avg >= 4.5:
+        return "Low risk"
+    if avg >= 3.5:
+        return "Moderate risk"
+    if avg >= 2.5:
+        return "Elevated risk"
+    return "High risk"
 
 
 def time_left():
@@ -241,6 +190,151 @@ def time_left():
     return remaining, f"{minutes:02d}:{seconds:02d}"
 
 
+def countdown_box(seconds: int, label: str = "Next question"):
+    box = st.empty()
+    for s in range(seconds, 0, -1):
+        box.warning(f"{label} in {s} second{'s' if s != 1 else ''}...")
+        time.sleep(1)
+    box.empty()
+
+
+def fallback_score(answer: str) -> dict:
+    lower = answer.lower()
+    for f in RED_FLAGS:
+        if f in lower:
+            return {
+                "score": 1,
+                "feedback": f"Red flag detected: '{f}'.",
+                "student_tip": "Avoid unclear or agent-led language and answer directly.",
+                "risk_flags": [f],
+                "missing_points": ["Specific personal rationale", "credible supporting detail"],
+                "counsellor_note": "Student used a high-risk phrase and needs coached reframing.",
+                "red_flag": True,
+                "generic_pos": 0,
+                "cluster_hits": 0,
+                "readiness": "High risk",
+            }
+
+    generic_pos = sum(1 for p in POSITIVE if p in lower)
+    course_track = st.session_state.profile.get("course_track") if "profile" in st.session_state else None
+    cluster_hits = 0
+    if course_track and course_track in COURSE_PROFILES:
+        keywords = COURSE_PROFILES[course_track].get("keywords", [])
+        cluster_hits = sum(1 for kw in keywords if kw.lower() in lower)
+
+    wc = len(answer.split())
+    score = 2
+    if wc < 15:
+        score = 2
+    elif generic_pos >= 4 and wc >= 60:
+        score = 5
+    elif generic_pos >= 2 and wc >= 40:
+        score = 4
+    elif generic_pos >= 1 and wc >= 25:
+        score = 3
+
+    if cluster_hits >= 2 and score <= 4:
+        score += 1
+    elif cluster_hits == 1 and score <= 3:
+        score += 1
+
+    score = max(1, min(score, 5))
+    feedback_map = {
+        5: "Excellent — specific and aligned with the chosen course and goals.",
+        4: "Good — add one more concrete detail to strengthen credibility.",
+        3: "Average — answer is acceptable but still generic.",
+        2: "Weak — too vague or incomplete.",
+        1: "High risk — major credibility concerns detected.",
+    }
+
+    tip = "Mention relevant modules, course outcomes, and how they support your career."
+    if course_track and course_track in COURSE_PROFILES:
+        tip = COURSE_PROFILES[course_track]["extra_tip"]
+
+    readiness_map = {5: "Low risk", 4: "Moderate risk", 3: "Moderate risk", 2: "Elevated risk", 1: "High risk"}
+    return {
+        "score": score,
+        "feedback": feedback_map[score],
+        "student_tip": tip,
+        "risk_flags": [],
+        "missing_points": ["More specific evidence"],
+        "counsellor_note": "Fallback scoring used because OpenAI evaluation was unavailable.",
+        "red_flag": False,
+        "generic_pos": generic_pos,
+        "cluster_hits": cluster_hits,
+        "readiness": readiness_map[score],
+    }
+
+
+def evaluate_with_openai(answer_text: str, category: str, question: str, profile: dict) -> dict:
+    system_prompt = """
+You are evaluating a UK university pre-CAS interview response for counsellor review.
+Return only valid JSON.
+Score from 1 to 5.
+Assess credibility, specificity, consistency with the student profile, and whether the answer sounds genuine and interview-ready.
+Be stricter when the answer is generic and more positive when the answer is specific and relevant.
+For institution choice, check whether the answer is meaningfully tied to the named university rather than sounding generic.
+For course choice and course knowledge, check whether the answer is tied to the named course.
+For finances, check clarity of sponsor/source/funds logic.
+For future plans, flag risky migration intent.
+Required JSON keys:
+score, feedback, student_tip, risk_flags, missing_points, counsellor_note, red_flag, readiness
+- score: integer 1-5
+- feedback: short string for the student
+- student_tip: short actionable improvement tip
+- risk_flags: array of short strings
+- missing_points: array of short strings
+- counsellor_note: short note for counsellor
+- red_flag: boolean
+- readiness: one of Low risk, Moderate risk, Elevated risk, High risk
+""".strip()
+
+    user_payload = {
+        "profile": {
+            "name": profile.get("name", "Applicant"),
+            "university": profile.get("university", ""),
+            "course": profile.get("course", ""),
+            "country": profile.get("country", ""),
+            "experience": profile.get("experience", ""),
+            "course_track": profile.get("course_track", ""),
+        },
+        "category": category,
+        "question": question,
+        "answer": answer_text,
+        "evaluation_focus": {
+            "institution_choice": "Check whether the answer is tailored to the named university or city.",
+            "course_choice": "Check whether the answer links prior study/work to the exact course.",
+            "course_knowledge": "Check whether modules, structure, or outcomes sound specific and plausible.",
+            "finances": "Check whether funding explanation is clear, credible, and complete.",
+            "future_plans": "Check whether the student clearly intends career progression and return/home-country logic.",
+        },
+    }
+
+    response = client.responses.create(
+        model="gpt-5-mini",
+        input=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(user_payload)},
+        ],
+    )
+
+    text = response.output_text.strip()
+    data = json.loads(text)
+    data["score"] = int(max(1, min(5, int(data.get("score", 2)))))
+    data["risk_flags"] = data.get("risk_flags", []) or []
+    data["missing_points"] = data.get("missing_points", []) or []
+    data["red_flag"] = bool(data.get("red_flag", False))
+    data["generic_pos"] = sum(1 for p in POSITIVE if p in answer_text.lower())
+
+    course_track = profile.get("course_track")
+    cluster_hits = 0
+    if course_track and course_track in COURSE_PROFILES:
+        keywords = COURSE_PROFILES[course_track].get("keywords", [])
+        cluster_hits = sum(1 for kw in keywords if kw.lower() in answer_text.lower())
+    data["cluster_hits"] = cluster_hits
+    return data
+
+
 def submit_current_answer(answer_text: str, idx: int):
     wc = len(answer_text.strip().split())
     if wc < st.session_state.get("min_words", 20):
@@ -248,13 +342,21 @@ def submit_current_answer(answer_text: str, idx: int):
             f"Your answer is quite short ({wc} words). "
             f"Aim for at least {st.session_state.get('min_words', 20)} words."
         )
-    result = fallback_score(answer_text.strip())
+
+    try:
+        result = evaluate_with_openai(
+            answer_text=answer_text.strip(),
+            category=st.session_state.current_category,
+            question=st.session_state.current_question,
+            profile=st.session_state.profile,
+        )
+    except Exception:
+        result = fallback_score(answer_text.strip())
 
     st.success(f"Score: {result['score']}/5 — {result['feedback']}")
-    st.caption(
-        f"Signals detected: {result.get('generic_pos', 0)} generic positives, "
-        f"{result.get('cluster_hits', 0)} course-cluster keywords."
-    )
+    st.info(f"Student tip: {result['student_tip']}")
+    if result.get("risk_flags"):
+        st.warning("Risk flags: " + ", ".join(result["risk_flags"]))
 
     st.session_state.scores.append(result["score"])
     st.session_state.log.append(
@@ -265,7 +367,11 @@ def submit_current_answer(answer_text: str, idx: int):
             "Answer": answer_text.strip(),
             "Score": result["score"],
             "Feedback": result["feedback"],
-            "Tip": result["tip"],
+            "Student Tip": result["student_tip"],
+            "Risk Flags": "; ".join(result.get("risk_flags", [])),
+            "Missing Points": "; ".join(result.get("missing_points", [])),
+            "Counsellor Note": result.get("counsellor_note", ""),
+            "Readiness": result.get("readiness", "Moderate risk"),
             "Red Flag": result.get("red_flag", False),
             "Generic Positives": result.get("generic_pos", 0),
             "Cluster Hits": result.get("cluster_hits", 0),
@@ -309,11 +415,11 @@ with st.sidebar:
                 del st.session_state[k]
             st.rerun()
 
-    total_sections = len(QUESTION_SEQUENCE)
+    total_sections = len(QUESTION_BANK)
     approx_minutes = total_sections * 3
     st.caption(
         f"Estimated interview duration: about {approx_minutes} minutes "
-        f"({total_sections} question-bank questions in fixed order, ~3 minutes each)."
+        f"({total_sections} categories, 1 question per category, ~3 minutes each)."
     )
 
     if start:
@@ -323,7 +429,7 @@ with st.sidebar:
             {
                 "started": True,
                 "completed": False,
-                "question_sequence": QUESTION_SEQUENCE,
+                "question_sequence": build_one_question_per_category(),
                 "idx": 0,
                 "scores": [],
                 "log": [],
@@ -352,38 +458,30 @@ with st.sidebar:
 
 st.title("Advisors Academy Pre-CAS Interview")
 st_autorefresh(interval=1000, key="timer_refresh")
-st.caption("Practice realistic UK university Pre-CAS questions with instant feedback.")
+st.caption("Typed-response UK pre-CAS mock interview with OpenAI evaluation and counsellor reporting.")
 
-with st.expander("How your answers are scored"):
+with st.expander("How evaluation works"):
     st.markdown(
         """
-        **Score meanings**
-
-        - 5/5 – Excellent: clear, specific, and aligned with your UK course and career plan.
-        - 4/5 – Good: strong answer; add one more concrete detail (module, exam, placement, outcome).
-        - 3/5 – Average: basically correct but generic; needs more course/university detail.
-        - 2/5 – Weak: vague or incomplete; needs clearer reasons and better link to your course.
-        - 1/5 – High risk: uses unclear or risky language (“I don’t know”, “my agent decided everything”, “I just want to stay in the UK”).
-
-        **What the system checks**
-
-        1. Structure and clarity — direct answer, reason, example, and link to course/career.
-        2. Connection to your actual UK course — real modules, exams, placements, or specialist topics.
+        - Each typed answer is evaluated against the selected category, question, and applicant profile.
+        - The app checks specificity, credibility, relevance to the named university/course, and risk signals.
+        - A counsellor report is generated at the end with notes, missing points, and readiness bands.
         """
     )
 
 if not st.session_state.get("started"):
-    total_sections = len(QUESTION_SEQUENCE)
+    total_sections = len(QUESTION_BANK)
     approx_minutes = total_sections * 3
     st.info(
         f"Fill in the applicant profile on the left, then click 'Start Pre-CAS Interview'. "
-        f"Estimated duration: about {approx_minutes} minutes for {total_sections} fixed question-bank questions."
+        f"Estimated duration: about {approx_minutes} minutes for 1 question per category."
     )
 else:
     if st.session_state.get("completed"):
         scores = st.session_state.scores
         avg = sum(scores) / len(scores) if scores else 0
         v = verdict(avg)
+        risk = counsellor_risk(avg)
 
         st.subheader("📊 Pre-CAS Performance Summary")
         m1, m2, m3, m4 = st.columns(4)
@@ -393,17 +491,37 @@ else:
         m4.metric("Verdict", v)
 
         df = pd.DataFrame(st.session_state.log)
+
         st.divider()
+        st.subheader("Counsellor report")
+        st.write(f"Overall counsellor risk band: **{risk}**")
+        red_flag_count = int(df["Red Flag"].sum()) if not df.empty else 0
+        st.write(f"Red-flagged responses: **{red_flag_count}**")
+
+        category_summary = (
+            df.groupby("Category", as_index=False)
+            .agg(
+                Average_Score=("Score", "mean"),
+                Readiness=("Readiness", "last"),
+                Red_Flags=("Red Flag", "sum"),
+            )
+        )
+        st.dataframe(category_summary, use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.subheader("Per-question review")
         st.dataframe(
             df[
                 [
                     "Question #",
                     "Category",
                     "Score",
+                    "Readiness",
                     "Feedback",
-                    "Tip",
-                    "Generic Positives",
-                    "Cluster Hits",
+                    "Student Tip",
+                    "Risk Flags",
+                    "Missing Points",
+                    "Counsellor Note",
                 ]
             ],
             use_container_width=True,
@@ -413,19 +531,21 @@ else:
         weak = df[df["Score"] <= 2]
         if not weak.empty:
             st.divider()
-            st.subheader("⚠️ Areas to Improve Before CAS")
+            st.subheader("Priority interventions")
             for _, row in weak.iterrows():
                 with st.expander(f"Q{int(row['Question #'])} — {row['Category']} ({int(row['Score'])}/5)"):
                     st.write(f"**Question:** {row['Question']}")
                     st.write(f"**Answer:** {row['Answer']}")
                     st.error(f"**Feedback:** {row['Feedback']}")
-                    st.info(f"**Tip:** {row['Tip']}")
+                    st.info(f"**Student tip:** {row['Student Tip']}")
+                    st.warning(f"**Missing points:** {row['Missing Points']}")
+                    st.caption(f"Counsellor note: {row['Counsellor Note']}")
 
         csv = df.to_csv(index=False).encode("utf-8")
         st.download_button(
-            "⬇ Download Interview Report (CSV)",
+            "⬇ Download Counsellor Report (CSV)",
             csv,
-            "advisors_pre_cas_report.csv",
+            "advisors_pre_cas_counsellor_report.csv",
             "text/csv",
         )
 
@@ -494,7 +614,11 @@ else:
                             "Answer": "",
                             "Score": 1,
                             "Feedback": "No answer submitted before time expired.",
-                            "Tip": "Give a direct answer within the time allowed.",
+                            "Student Tip": "Give a direct answer within the time allowed.",
+                            "Risk Flags": "No submission",
+                            "Missing Points": "Direct response; supporting detail",
+                            "Counsellor Note": "Student did not submit an answer within the time limit.",
+                            "Readiness": "High risk",
                             "Red Flag": False,
                             "Generic Positives": 0,
                             "Cluster Hits": 0,
@@ -523,18 +647,7 @@ else:
                 )
                 if st.button("Submit Follow-up →", type="primary", use_container_width=True):
                     if follow.strip() and len(follow.split()) >= 20:
-                        new_score = min(r["score"] + 1, 4)
-                        st.session_state.scores[-1] = new_score
-                        st.session_state.log[-1].update(
-                            {
-                                "Score": new_score,
-                                "Feedback": "Follow-up accepted — credibility partially recovered.",
-                            }
-                        )
-                        st.session_state.show_followup = False
-                        st.session_state.idx += 1
-                        pick_question()
-                        st.rerun()
+                        submit_current_answer(follow, idx)
                     else:
                         st.warning("Please provide a sufficiently detailed follow-up (at least 20 words).")
 
@@ -563,10 +676,8 @@ else:
                 cat = categories[i] if i < len(categories) else ""
                 row = st.session_state.log[i]
                 flag = " 🚩" if row.get("Red Flag") else ""
-                gp = row.get("Generic Positives", 0)
-                ch = row.get("Cluster Hits", 0)
                 st.markdown(f"`Q{i+1}` {bar} **{sc}/5**{flag}  \n_{cat}_")
-                st.caption(f"Signals: {gp} generic positives, {ch} cluster hits.")
+                st.caption(f"Readiness: {row.get('Readiness', 'Moderate risk')}")
 
             st.divider()
             p = st.session_state.profile
