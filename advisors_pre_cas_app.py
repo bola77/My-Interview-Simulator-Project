@@ -4,8 +4,8 @@ import time
 
 import pandas as pd
 import streamlit as st
-from openai import OpenAI
 import streamlit.components.v1 as components
+from openai import OpenAI
 
 from advisors_theme import apply_advisors_theme
 
@@ -25,23 +25,72 @@ st.markdown(
     div[data-testid="stToolbar"] { display: none; }
     header[data-testid="stHeader"] { display: none; }
     #MainMenu { visibility: hidden; }
-    .timer-box {
-        border-radius: 20px;
-        padding: 1.4rem 1.5rem;
-        background: rgba(15, 23, 42, 0.06);
-        text-align: center;
-        margin-bottom: 1.2rem;
+
+    .block-container {
+        padding-top: 1.2rem;
+        padding-bottom: 2rem;
+        max-width: 1500px;
     }
-    .timer-value {
-        font-size: 3.8rem;
-        font-weight: 900;
-        line-height: 1.05;
-        margin: 0;
+
+    h1 {
+        font-size: 3rem !important;
+        font-weight: 800 !important;
+        line-height: 1.1 !important;
     }
-    .timer-label {
-       font-size: 1.1rem;
-       opacity: 0.85;
-       margin-top: 0.5rem;
+
+    h2 {
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+    }
+
+    h3 {
+        font-size: 1.45rem !important;
+        font-weight: 700 !important;
+    }
+
+    p, li, label, div {
+        font-size: 1.05rem;
+    }
+
+    .stCaption {
+        font-size: 0.98rem !important;
+    }
+
+    textarea {
+        font-size: 1.08rem !important;
+        line-height: 1.6 !important;
+    }
+
+    div[data-testid="stTextArea"] textarea {
+        min-height: 280px !important;
+        padding: 1rem !important;
+        border-radius: 14px !important;
+    }
+
+    div[data-testid="stButton"] button {
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+        border-radius: 12px !important;
+    }
+
+    div[data-testid="stRadio"] label,
+    div[data-testid="stSelectbox"] label,
+    div[data-testid="stTextInput"] label {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+    }
+
+    section[data-testid="stSidebar"] * {
+        font-size: 1rem !important;
+    }
+
+    @media (min-width: 1200px) {
+        .block-container {
+            padding-left: 2rem;
+            padding-right: 2rem;
+        }
     }
     </style>
     """,
@@ -446,11 +495,7 @@ def evaluate_with_openai(answer_text: str, category: str, question: str, profile
     if not raw:
         raise ValueError("OpenAI returned empty content.")
 
-    try:
-        data = json.loads(raw)
-    except Exception as e:
-        raise ValueError(f"Invalid JSON from OpenAI: {raw[:300]}") from e
-
+    data = json.loads(raw)
     data["score"] = int(max(1, min(5, int(data.get("score", 2)))))
     data["feedback"] = str(data.get("feedback", "Response evaluated."))
     data["student_tip"] = str(data.get("student_tip", ANSWER_TIPS.get(category, ANSWER_TIPS["default"])))
@@ -495,29 +540,68 @@ def timer_component(remaining_seconds: int):
     color = "#15803d" if remaining_seconds > 60 else "#d97706" if remaining_seconds > 30 else "#dc2626"
     components.html(
         f"""
-        <div class="timer-box">
-            <div id="timer" class="timer-value" style="color:{color};"></div>
-            <div class="timer-label">Time left</div>
-        </div>
-        <script>
-        const end = Date.now() + ({remaining_seconds} * 1000);
-        const el = document.getElementById('timer');
-        function format(sec) {{
-            const m = String(Math.floor(sec / 60)).padStart(2, '0');
-            const s = String(sec % 60).padStart(2, '0');
-            return `${{m}}:${{s}}`;
-        }}
-        function tick() {{
-            const left = Math.max(0, Math.floor((end - Date.now()) / 1000));
-            el.textContent = format(left);
-            if (left <= 0) clearInterval(window.__aaTimerInterval);
-        }}
-        tick();
-        if (window.__aaTimerInterval) clearInterval(window.__aaTimerInterval);
-        window.__aaTimerInterval = setInterval(tick, 1000);
-        </script>
+        <html>
+        <head>
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                background: transparent;
+                font-family: Arial, sans-serif;
+            }}
+            .timer-wrap {{
+                border-radius: 22px;
+                padding: 1.6rem 1.4rem;
+                background: rgba(15, 23, 42, 0.06);
+                text-align: center;
+                width: 100%;
+                box-sizing: border-box;
+            }}
+            .timer-value {{
+                font-size: 4.6rem;
+                font-weight: 900;
+                line-height: 1;
+                margin: 0;
+                color: {color};
+            }}
+            .timer-label {{
+                font-size: 1.15rem;
+                margin-top: 0.65rem;
+                opacity: 0.8;
+            }}
+        </style>
+        </head>
+        <body>
+            <div class="timer-wrap">
+                <div id="timer" class="timer-value"></div>
+                <div class="timer-label">Time left</div>
+            </div>
+
+            <script>
+                const end = Date.now() + ({remaining_seconds} * 1000);
+                const el = document.getElementById("timer");
+
+                function format(sec) {{
+                    const m = String(Math.floor(sec / 60)).padStart(2, "0");
+                    const s = String(sec % 60).padStart(2, "0");
+                    return `${{m}}:${{s}}`;
+                }}
+
+                function tick() {{
+                    const left = Math.max(0, Math.floor((end - Date.now()) / 1000));
+                    el.textContent = format(left);
+                    if (left <= 0) clearInterval(window.__aaTimerInterval);
+                }}
+
+                tick();
+                if (window.__aaTimerInterval) clearInterval(window.__aaTimerInterval);
+                window.__aaTimerInterval = setInterval(tick, 1000);
+            </script>
+        </body>
+        </html>
         """,
-        height=180,
+        height=220,
+        scrolling=False,
     )
 
 
@@ -582,12 +666,7 @@ init_session_state()
 with st.sidebar:
     st.header("👤 Applicant Profile")
 
-    study_level = st.radio(
-        "Study level",
-        ["UG", "PG"],
-        horizontal=True,
-    )
-
+    study_level = st.radio("Study level", ["UG", "PG"], horizontal=True)
     filtered_tracks = [k for k in COURSE_PROFILES.keys() if k.startswith(f"{study_level} –")]
     if not filtered_tracks:
         filtered_tracks = ["No course tracks available"]
@@ -721,7 +800,7 @@ else:
         if remaining == 0:
             st.session_state.question_expired = True
 
-        left, right = st.columns([2, 1])
+        left, right = st.columns([2.4, 1])
 
         with left:
             st.markdown(f"**Topic:** `{st.session_state.current_category}`")
@@ -741,7 +820,7 @@ else:
             answer_text = st.text_area(
                 "Applicant answer",
                 key=f"answer_{idx}",
-                height=220,
+                height=280,
                 placeholder="Type the applicant's answer here...",
                 disabled=remaining == 0,
             )
@@ -762,7 +841,7 @@ else:
                 st.warning(f"🔍 Follow-up: {FOLLOW_UPS[st.session_state.current_category]}")
                 follow = st.text_area(
                     "Follow-up answer",
-                    height=130,
+                    height=160,
                     key=f"follow_{idx}",
                     placeholder="Provide more specific details to recover credibility…",
                 )
