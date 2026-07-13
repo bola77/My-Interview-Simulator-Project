@@ -10,13 +10,21 @@ ADVISORS_CSS = """
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Keep the collapsed sidebar control above the banner */
+[data-testid="collapsedControl"] {
+    z-index: 9999 !important;
+}
+
 /* Top brand bar */
 .advisors-brand-bar {
     background: linear-gradient(90deg, #0F6CBD 0%, #103E73 100%);
     color: #FFFFFF;
-    padding: 0.75rem 1.25rem;
+    padding: 0.75rem 1.25rem 0.75rem 4.5rem;
+    margin-top: 0.25rem;
     border-radius: 0 0 8px 8px;
     box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    position: relative;
+    z-index: 1;
 }
 
 /* Brand title and subtitle */
@@ -47,8 +55,8 @@ h1, h2, h3 {
 }
 
 /* Hide Streamlit default footer & menu for cleaner branding */
-footer {visibility: hidden;}
-#MainMenu {visibility: hidden;}
+footer { visibility: hidden; }
+#MainMenu { visibility: hidden; }
 </style>
 """
 
