@@ -25,22 +25,22 @@ st.markdown(
     header[data-testid="stHeader"] { display: none; }
     #MainMenu { visibility: hidden; }
     .timer-box {
-        border-radius: 16px;
-        padding: 1rem 1.25rem;
-        background: rgba(15, 23, 42, 0.04);
+        border-radius: 20px;
+        padding: 1.4rem 1.5rem;
+        background: rgba(15, 23, 42, 0.06);
         text-align: center;
-        margin-bottom: 1rem;
+        margin-bottom: 1.2rem;
     }
     .timer-value {
-        font-size: 3rem;
-        font-weight: 800;
-        line-height: 1;
+        font-size: 3.8rem;
+        font-weight: 900;
+        line-height: 1.05;
         margin: 0;
     }
     .timer-label {
-        font-size: 0.95rem;
-        opacity: 0.75;
-        margin-top: 0.4rem;
+       font-size: 1.1rem;
+       opacity: 0.85;
+       margin-top: 0.5rem;
     }
     </style>
     """,
@@ -516,7 +516,7 @@ def timer_component(remaining_seconds: int):
         window.__aaTimerInterval = setInterval(tick, 1000);
         </script>
         """,
-        height=140,
+        height=180,
     )
 
 
