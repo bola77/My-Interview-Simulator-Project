@@ -151,9 +151,209 @@ MAX_VOICE_ATTEMPTS = 3
 
 COURSE_PROFILES = {
     "UG – Business & Management": {
-        "examples": "Business Administration; Accounting & Finance; Marketing; International Business",
-        "extra_tip": "Mention business modules like finance, marketing, or strategy and explain how they fit your career plan.",
-        "keywords": ["marketing", "finance", "accounting", "strategy", "international business"],
+        "examples": "Business Management; International Business; Business Administration; Entrepreneurship",
+        "extra_tip": "Mention business modules like strategy, operations, leadership, entrepreneurship, or international business, and explain how they fit your career plan.",
+        "keywords": [
+            "business", "management", "strategy", "leadership", "operations",
+            "entrepreneurship", "international business", "organisation", "business environment"
+        ],
+    },
+    "UG – Accounting & Finance": {
+        "examples": "Accounting and Finance; Banking and Finance; Financial Management; Economics and Finance",
+        "extra_tip": "Mention finance or accounting modules such as financial reporting, auditing, taxation, investment, or corporate finance, and link them to your career goal.",
+        "keywords": [
+            "accounting", "finance", "taxation", "audit", "auditing",
+            "financial reporting", "investment", "banking", "corporate finance", "economics"
+        ],
+    },
+    "UG – Marketing & Digital Marketing": {
+        "examples": "Marketing; Digital Marketing; Branding; Advertising and Marketing Communications",
+        "extra_tip": "Mention modules like consumer behaviour, branding, digital strategy, social media marketing, or market research, and explain how they support your career progression.",
+        "keywords": [
+            "marketing", "digital marketing", "branding", "advertising",
+            "consumer behaviour", "market research", "social media", "campaign", "seo", "content"
+        ],
+    },
+    "UG – Computer Science & IT": {
+        "examples": "Computer Science; Computing; Information Technology; Software Engineering",
+        "extra_tip": "Mention technical areas such as programming, databases, software development, operating systems, networking, or web development, and connect them to your experience or goals.",
+        "keywords": [
+            "computer science", "computing", "information technology", "software",
+            "programming", "database", "network", "web development", "algorithm", "system design"
+        ],
+    },
+    "UG – Cyber Security & Networks": {
+        "examples": "Cyber Security; Network Computing; Information Security; Digital Forensics",
+        "extra_tip": "Mention topics like information security, ethical hacking, network security, digital forensics, or risk management, and explain how they relate to your planned role.",
+        "keywords": [
+            "cyber security", "information security", "network security", "ethical hacking",
+            "digital forensics", "risk", "threat", "soc", "penetration testing", "security"
+        ],
+    },
+    "UG – Data Science & AI": {
+        "examples": "Data Science; Artificial Intelligence; Machine Learning; Business Analytics",
+        "extra_tip": "Mention analytics, machine learning, statistics, Python, big data, or AI applications, and explain how these skills support your future work.",
+        "keywords": [
+            "data science", "artificial intelligence", "machine learning", "analytics",
+            "statistics", "python", "big data", "data visualisation", "predictive", "model"
+        ],
+    },
+    "UG – Engineering": {
+        "examples": "Mechanical Engineering; Civil Engineering; Electrical and Electronic Engineering; General Engineering",
+        "extra_tip": "Mention technical modules, lab work, design, manufacturing, structures, circuits, or project-based learning, and explain the engineering career path you want to follow.",
+        "keywords": [
+            "engineering", "mechanical", "civil", "electrical", "electronic",
+            "design", "manufacturing", "structures", "materials", "thermodynamics", "circuits"
+        ],
+    },
+    "UG – Health & Social Care": {
+        "examples": "Health and Social Care; Health Care Management; Community Health; Social Care",
+        "extra_tip": "Mention care systems, safeguarding, patient support, policy, or service delivery, and show how the course fits your healthcare or community career goals.",
+        "keywords": [
+            "health", "social care", "care", "community", "safeguarding",
+            "patient", "service delivery", "wellbeing", "support", "healthcare"
+        ],
+    },
+    "UG – Nursing": {
+        "examples": "Adult Nursing; Mental Health Nursing; Child Nursing; Nursing Practice",
+        "extra_tip": "Mention clinical placements, patient care, evidence-based practice, professional standards, or nursing specialisms, and connect them to your long-term clinical plan.",
+        "keywords": [
+            "nursing", "clinical", "placement", "patient care", "evidence-based practice",
+            "adult nursing", "mental health", "child nursing", "midwifery", "healthcare practice"
+        ],
+    },
+    "UG – Biomedical & Life Sciences": {
+        "examples": "Biomedical Science; Biological Sciences; Medical Science; Human Biology",
+        "extra_tip": "Mention laboratory skills, human biology, microbiology, genetics, pathology, or biomedical research, and explain how they support your intended profession.",
+        "keywords": [
+            "biomedical", "biology", "microbiology", "genetics", "pathology",
+            "laboratory", "human biology", "life sciences", "diagnostics", "research"
+        ],
+    },
+    "UG – Law": {
+        "examples": "Law; International Law; Commercial Law; Law and Practice",
+        "extra_tip": "Mention legal research, contract law, criminal law, international law, or legal practice, and explain how the course supports your legal or policy career path.",
+        "keywords": [
+            "law", "legal", "contract", "criminal law", "commercial law",
+            "international law", "legal research", "policy", "regulation", "justice"
+        ],
+    },
+    "UG – Psychology": {
+        "examples": "Psychology; Applied Psychology; Clinical Psychology pathway; Counselling Studies",
+        "extra_tip": "Mention psychological theory, research methods, behavioural science, cognition, development, or mental health topics, and explain your intended professional use of the degree.",
+        "keywords": [
+            "psychology", "behaviour", "mental health", "research methods",
+            "cognition", "development", "counselling", "clinical", "behavioural science", "wellbeing"
+        ],
+    },
+    "UG – Education": {
+        "examples": "Education Studies; Primary Education; Teaching Studies; Childhood Education",
+        "extra_tip": "Mention curriculum, pedagogy, inclusive education, classroom practice, or educational leadership, and connect the course to your teaching or education role.",
+        "keywords": [
+            "education", "teaching", "pedagogy", "curriculum", "classroom",
+            "inclusive education", "childhood", "learning", "teacher", "assessment"
+        ],
+    },
+    "PG – MBA & Management": {
+        "examples": "MBA; International Business Management; Management; Leadership",
+        "extra_tip": "Mention leadership, strategy, operations, innovation, organisational behaviour, or global business, and explain your management progression clearly.",
+        "keywords": [
+            "mba", "management", "leadership", "strategy", "operations",
+            "innovation", "organisation", "business leadership", "global business", "executive"
+        ],
+    },
+    "PG – Project Management": {
+        "examples": "MSc Project Management; Construction Project Management; Engineering Management",
+        "extra_tip": "Mention project planning, budgeting, scheduling, procurement, risk, quality, or stakeholder management, and link the course to your industry experience.",
+        "keywords": [
+            "project management", "project planning", "budgeting", "scheduling",
+            "stakeholder", "risk management", "procurement", "quality", "delivery", "pmp"
+        ],
+    },
+    "PG – Public Health": {
+        "examples": "Master of Public Health; Public Health and Community Studies; Global Health",
+        "extra_tip": "Mention epidemiology, health promotion, policy, biostatistics, environmental health, or population health, and explain how this supports your work back home.",
+        "keywords": [
+            "public health", "epidemiology", "health promotion", "policy",
+            "biostatistics", "population health", "community health", "global health", "prevention", "environmental health"
+        ],
+    },
+    "PG – Data Science, AI & Analytics": {
+        "examples": "MSc Data Science; MSc Artificial Intelligence; MSc Business Analytics; Big Data Analytics",
+        "extra_tip": "Mention machine learning, statistical modelling, analytics, data engineering, AI, or visualisation, and explain how the programme supports your technical career goals.",
+        "keywords": [
+            "data science", "analytics", "machine learning", "artificial intelligence",
+            "statistical modelling", "data engineering", "python", "big data", "visualisation", "predictive analytics"
+        ],
+    },
+    "PG – Cyber Security": {
+        "examples": "MSc Cyber Security; MSc Information Security; MSc Digital Forensics",
+        "extra_tip": "Mention cyber risk, governance, security operations, network defence, penetration testing, or digital forensics, and explain the specific role you want after graduation.",
+        "keywords": [
+            "cyber security", "information security", "governance", "risk",
+            "digital forensics", "penetration testing", "security operations", "network defence", "security policy", "compliance"
+        ],
+    },
+    "PG – Finance, FinTech & Accounting": {
+        "examples": "MSc Finance; MSc Accounting and Finance; MSc FinTech; MSc Investment Management",
+        "extra_tip": "Mention financial analysis, investment, risk, FinTech, corporate finance, accounting standards, or portfolio management, and link these to your target role.",
+        "keywords": [
+            "finance", "fintech", "investment", "accounting", "financial analysis",
+            "portfolio", "corporate finance", "risk", "banking", "financial management"
+        ],
+    },
+    "PG – Logistics & Supply Chain": {
+        "examples": "MSc Supply Chain Management; MSc Logistics; MSc Procurement and Supply",
+        "extra_tip": "Mention procurement, logistics, operations, inventory, supply chain strategy, or global trade, and explain the business problem you want to solve in your home country.",
+        "keywords": [
+            "supply chain", "logistics", "procurement", "inventory", "operations",
+            "distribution", "global trade", "warehouse", "transport", "planning"
+        ],
+    },
+    "PG – Engineering Management": {
+        "examples": "MSc Engineering Management; MSc Advanced Manufacturing; MSc Sustainable Energy",
+        "extra_tip": "Mention engineering systems, project delivery, manufacturing, sustainability, energy, or leadership in technical environments, and connect the degree to your prior technical background.",
+        "keywords": [
+            "engineering management", "manufacturing", "sustainable energy", "technical leadership",
+            "systems", "operations", "maintenance", "production", "engineering project", "industrial"
+        ],
+    },
+    "PG – Health Management": {
+        "examples": "MSc Health Services Management; MSc Healthcare Management; MSc International Health Management",
+        "extra_tip": "Mention healthcare systems, service improvement, leadership, policy, quality assurance, or health administration, and explain how you will apply this in your home country.",
+        "keywords": [
+            "health management", "healthcare management", "health services",
+            "service improvement", "quality assurance", "health policy", "administration", "leadership", "hospital", "patient services"
+        ],
+    },
+    "PG – Law & International Relations": {
+        "examples": "LLM International Law; LLM Commercial Law; MSc International Relations",
+        "extra_tip": "Mention legal analysis, international regulation, governance, dispute resolution, diplomacy, or policy, and explain your intended professional application.",
+        "keywords": [
+            "llm", "international law", "commercial law", "legal analysis",
+            "regulation", "governance", "policy", "diplomacy", "international relations", "dispute resolution"
+        ],
+    },
+    "PG – Pre-registration Nursing": {
+        "examples": "MSc Adult Nursing (Pre-registration); Master of Nursing with Pre-Registration (Adult); MSc Nursing (Pre-registration - Adult); MSc Nursing Studies (Adult) Pre-registration",
+        "extra_tip": "Mention that this is a graduate-entry route into registered nursing, and refer to clinical placements, NMC standards, patient care, evidence-based practice, simulation, and professional registration.",
+        "keywords": [
+            "pre-registration nursing",
+            "adult nursing",
+            "nursing",
+            "clinical placement",
+            "placements",
+            "nmc",
+            "patient care",
+            "evidence-based practice",
+            "simulation",
+            "registered nurse",
+            "professional registration",
+            "clinical skills",
+            "health assessment",
+            "care planning",
+            "practice learning"
+        ],
     },
 }
 
