@@ -711,23 +711,25 @@ init_session_state()
 with st.sidebar:
     st.header("👤 Applicant Profile")
 
-   study_level = st.radio(
-    "Study level",
-    ["UG", "PG"],
-    horizontal=True,
-)
+     study_level = st.radio(
+        "Study level",
+        ["UG", "PG"],
+        horizontal=True,
+    )
 
-filtered_tracks = [
-    k for k in COURSE_PROFILES.keys()
-    if k.startswith(f"{study_level} –")
-]
+    filtered_tracks = [
+        k for k in COURSE_PROFILES.keys()
+        if k.startswith(f"{study_level} –")
+    ]
 
-course_track = st.selectbox(
-    "Course track",
-    filtered_tracks,
-    index=0 if filtered_tracks else None,
-    help="Choose the closest cluster for the applicant's course.",
-)
+    if not filtered_tracks:
+        filtered_tracks = ["No course tracks available"]
+
+    course_track = st.selectbox(
+        "Course track",
+        filtered_tracks,
+        index=0,
+        help="Choose the closest cluster for the applicant's course.",
     )
 
     s_name = st.text_input("Full Name")
