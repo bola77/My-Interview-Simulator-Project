@@ -807,7 +807,7 @@ else:
 
         if remaining == 0:
             st.session_state.question_expired = True
-             latest_text = ""
+            latest_text = ""
     if st.session_state.get("voice_attempts"):
         latest_text = st.session_state.voice_attempts[-1].get("text", "").strip()
 
