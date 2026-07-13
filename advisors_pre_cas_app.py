@@ -825,6 +825,15 @@ else:
             "Counsellor Note": "Question auto-advanced after the timer expired.",
             "Readiness": "Elevated risk",
             "Red Flag": False,
+            "Generic Positives": 0,
+            "Cluster Hits": 0,
+        }
+    )
+
+    st.session_state.scores.append(0)
+    st.session_state.idx += 1
+    pick_question()
+    st.rerun()
 
         left, right = st.columns([2.4, 1])
 
