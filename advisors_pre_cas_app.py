@@ -267,29 +267,7 @@ def fallback_score(answer: str) -> dict:
 
 
 def evaluate_with_openai(answer_text: str, category: str, question: str, profile: dict) -> dict:
-    system_prompt = """
-You are evaluating a UK university pre-CAS interview response for counsellor review.
-Return only valid JSON.
-Score from 1 to 5.
-Assess credibility, specificity, consistency with the student profile, and whether the answer sounds genuine and interview-ready.
-Be stricter when the answer is generic and more positive when the answer is specific and relevant.
-For institution choice, check whether the answer is meaningfully tied to the named university rather than sounding generic.
-For course choice and course knowledge, check whether the answer is tied to the named course.
-For finances, check clarity of sponsor/source/funds logic.
-For future plans, flag risky migration intent.
-Required JSON keys:
-score, feedback, student_tip, risk_flags, missing_points, counsellor_note, red_flag, readiness
-- score: integer 1-5
-- feedback: short string for the student
-- student_tip: short actionable improvement tip
-- risk_flags: array of short strings
-- missing_points: array of short strings
-- counsellor_note: short note for counsellor
-- red_flag: boolean
-- readiness: one of Low risk, Moderate risk, Elevated risk, High risk
-""".strip()
-
-    user_payload = {
+    prompt = {
         "profile": {
             "name": profile.get("name", "Applicant"),
             "university": profile.get("university", ""),
@@ -301,29 +279,69 @@ score, feedback, student_tip, risk_flags, missing_points, counsellor_note, red_f
         "category": category,
         "question": question,
         "answer": answer_text,
-        "evaluation_focus": {
-            "institution_choice": "Check whether the answer is tailored to the named university or city.",
+        "instructions": {
+            "goal": "Evaluate a UK pre-CAS interview answer for counsellor review.",
+            "institution_choice": "Check whether the answer is genuinely tailored to the named university or city.",
             "course_choice": "Check whether the answer links prior study/work to the exact course.",
             "course_knowledge": "Check whether modules, structure, or outcomes sound specific and plausible.",
             "finances": "Check whether funding explanation is clear, credible, and complete.",
-            "future_plans": "Check whether the student clearly intends career progression and return/home-country logic.",
+            "future_plans": "Check whether the student shows credible return or career logic and avoids risky migration intent.",
         },
     }
 
-    response = client.responses.create(
-        model="gpt-5-mini",
-        input=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps(user_payload)},
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are evaluating a UK university pre-CAS interview response. "
+                    "Return only valid JSON with these keys exactly: "
+                    "score, feedback, student_tip, risk_flags, missing_points, "
+                    "counsellor_note, red_flag, readiness. "
+                    "score must be an integer from 1 to 5. "
+                    "risk_flags and missing_points must be arrays of short strings. "
+                    "red_flag must be true or false. "
+                    "readiness must be one of: Low risk, Moderate risk, Elevated risk, High risk."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(prompt),
+            },
         ],
     )
 
-    text = response.output_text.strip()
-    data = json.loads(text)
+    raw = response.choices[0].message.content.strip()
+
+    try:
+        data = json.loads(raw)
+    except Exception:
+        data = {
+            "score": 2,
+            "feedback": "Evaluation format error. Fallback review applied.",
+            "student_tip": "Add more specific details linked to your university, course, and plans.",
+            "risk_flags": ["Format error"],
+            "missing_points": ["Specific supporting detail"],
+            "counsellor_note": f"Model returned non-JSON output: {raw[:200]}",
+            "red_flag": False,
+            "readiness": "Elevated risk",
+        }
+
     data["score"] = int(max(1, min(5, int(data.get("score", 2)))))
+    data["feedback"] = str(data.get("feedback", "Response evaluated."))
+    data["student_tip"] = str(data.get("student_tip", "Add more specific detail."))
     data["risk_flags"] = data.get("risk_flags", []) or []
     data["missing_points"] = data.get("missing_points", []) or []
+    data["counsellor_note"] = str(data.get("counsellor_note", ""))
     data["red_flag"] = bool(data.get("red_flag", False))
+    data["readiness"] = str(data.get("readiness", "Moderate risk"))
+
+    valid_readiness = {"Low risk", "Moderate risk", "Elevated risk", "High risk"}
+    if data["readiness"] not in valid_readiness:
+        data["readiness"] = "Moderate risk"
+
     data["generic_pos"] = sum(1 for p in POSITIVE if p in answer_text.lower())
 
     course_track = profile.get("course_track")
@@ -332,6 +350,7 @@ score, feedback, student_tip, risk_flags, missing_points, counsellor_note, red_f
         keywords = COURSE_PROFILES[course_track].get("keywords", [])
         cluster_hits = sum(1 for kw in keywords if kw.lower() in answer_text.lower())
     data["cluster_hits"] = cluster_hits
+
     return data
 
 
@@ -458,7 +477,7 @@ with st.sidebar:
 
 st.title("Advisors Academy Pre-CAS Interview")
 st_autorefresh(interval=1000, key="timer_refresh")
-st.caption("Typed-response UK pre-CAS mock interview and counsellor reporting.")
+st.caption("Typed-response UK pre-CAS mock interview with OpenAI evaluation and counsellor reporting.")
 
 with st.expander("How evaluation works"):
     st.markdown(
