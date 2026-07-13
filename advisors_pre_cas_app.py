@@ -5,7 +5,6 @@ import time
 import pandas as pd
 import streamlit as st
 from openai import OpenAI
-from streamlit_autorefresh import st_autorefresh
 
 from advisors_theme import apply_advisors_theme
 
@@ -525,8 +524,6 @@ with st.sidebar:
             st.warning("Time is up for this question!")
 
 st.title("Advisors Academy Pre-CAS Interview")
-if st.session_state.started and not st.session_state.completed:
-    st_autorefresh(interval=1000, key="timer_refresh")
 st.caption("Typed-response UK pre-CAS mock interview with OpenAI evaluation and counsellor reporting.")
 
 with st.expander("How evaluation works"):
