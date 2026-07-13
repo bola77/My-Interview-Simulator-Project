@@ -458,7 +458,7 @@ with st.sidebar:
 
 st.title("Advisors Academy Pre-CAS Interview")
 st_autorefresh(interval=1000, key="timer_refresh")
-st.caption("Typed-response UK pre-CAS mock interview with OpenAI evaluation and counsellor reporting.")
+st.caption("Typed-response UK pre-CAS mock interview and counsellor reporting.")
 
 with st.expander("How evaluation works"):
     st.markdown(
