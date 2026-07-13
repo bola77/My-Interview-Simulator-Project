@@ -600,7 +600,7 @@ def timer_component(remaining_seconds: int):
         </body>
         </html>
         """,
-        height=200,
+        height=100,
         scrolling=False,
     )
 
@@ -807,6 +807,24 @@ else:
 
         if remaining == 0:
             st.session_state.question_expired = True
+             latest_text = ""
+    if st.session_state.get("voice_attempts"):
+        latest_text = st.session_state.voice_attempts[-1].get("text", "").strip()
+
+    st.session_state.log.append(
+        {
+            "Question #": idx + 1,
+            "Category": st.session_state.current_category,
+            "Question": st.session_state.current_question,
+            "Answer": latest_text,
+            "Score": 0,
+            "Feedback": "Time expired before submission.",
+            "Student Tip": "Give a complete answer before the timer ends.",
+            "Risk Flags": "Time expired",
+            "Missing Points": "Answer not submitted in time",
+            "Counsellor Note": "Question auto-advanced after the timer expired.",
+            "Readiness": "Elevated risk",
+            "Red Flag": False,
 
         left, right = st.columns([2.4, 1])
 
