@@ -600,7 +600,7 @@ def timer_component(remaining_seconds: int):
         </body>
         </html>
         """,
-        height=220,
+        height=200,
         scrolling=False,
     )
 
