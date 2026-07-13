@@ -554,7 +554,7 @@ def timer_component(remaining_seconds: int):
                 padding: 1.6rem 1.4rem;
                 background: rgba(15, 23, 42, 0.06);
                 text-align: center;
-                width: 100%;
+                width: 80%;
                 box-sizing: border-box;
             }}
             .timer-value {{
@@ -700,8 +700,16 @@ with st.sidebar:
 
     if start:
         reset_interview_state()
-        cats = list(QUESTION_BANK.keys())
-        random.shuffle(cats)
+        cats = [
+             "Background",
+             "Study destination",
+             "Institution choice",
+             "Course choice",
+             "Course knowledge",
+             "Finances",
+             "Accommodation",
+             "Future plans",
+        ]
         st.session_state.started = True
         st.session_state.completed = False
         st.session_state.categories = cats
