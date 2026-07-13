@@ -1,12 +1,10 @@
 import json
 import random
 import time
-from tempfile import NamedTemporaryFile
 
 import pandas as pd
 import streamlit as st
 from openai import OpenAI
-from audio_recorder_streamlit import audio_recorder
 
 from advisors_theme import apply_advisors_theme
 
@@ -146,7 +144,6 @@ DEFAULT_THINK_TIME = 3
 DEFAULT_HINT_MODE = True
 DEFAULT_MIN_WORDS = 20
 QUESTION_TIME_SECONDS = 3 * 60
-MAX_VOICE_ATTEMPTS = 3
 
 COURSE_PROFILES = {
     "UG – Business & Management": {
@@ -290,7 +287,6 @@ def init_session_state():
         "current_category": "",
         "current_question": "",
         "question_start": None,
-        "voice_attempts": [],
         "last_result": None,
         "question_expired": False,
     }
@@ -303,22 +299,16 @@ def reset_interview_state():
     keys_to_clear = [
         "started", "completed", "categories", "idx", "scores", "log",
         "show_followup", "profile", "think_time", "hint_mode", "min_words",
-        "current_category", "current_question", "question_start", "voice_attempts",
+        "current_category", "current_question", "question_start",
         "last_result", "question_expired",
     ]
     for key in keys_to_clear:
         if key in st.session_state:
             del st.session_state[key]
+    keys_to_drop = [k for k in st.session_state.keys() if k.startswith("answer_") or k.startswith("follow_")]
+    for key in keys_to_drop:
+        del st.session_state[key]
     init_session_state()
-
-
-def transcribe_audio_bytes(audio_bytes: bytes) -> str:
-    with NamedTemporaryFile(delete=True, suffix=".wav") as temp_file:
-        temp_file.write(audio_bytes)
-        temp_file.flush()
-        with open(temp_file.name, "rb") as audio_file:
-            response = client.audio.transcriptions.create(model="whisper-1", file=audio_file)
-    return response.text
 
 
 def pick_question():
@@ -331,7 +321,6 @@ def pick_question():
     st.session_state.current_question = random.choice(QUESTION_BANK[cat])
     st.session_state.show_followup = False
     st.session_state.question_start = time.time()
-    st.session_state.voice_attempts = []
     st.session_state.question_expired = False
 
 
@@ -747,38 +736,23 @@ else:
                 cluster = COURSE_PROFILES[selected_track]
                 st.caption(f"Course cluster hint ({selected_track}): {cluster['extra_tip']} Example programmes include: {cluster['examples']}.")
 
-            st.subheader("Record your answer")
-            current_attempts = len(st.session_state.voice_attempts)
-            if current_attempts > 0:
-                st.caption(f"{current_attempts} recorded attempt(s). Maximum allowed: {MAX_VOICE_ATTEMPTS}.")
+            st.subheader("Type your answer")
+            answer_text = st.text_area(
+                "Applicant answer",
+                key=f"answer_{idx}",
+                height=220,
+                placeholder="Type the applicant's answer here...",
+                disabled=remaining == 0,
+            )
 
-            if current_attempts < MAX_VOICE_ATTEMPTS and remaining > 0:
-                audio_bytes = audio_recorder(pause_threshold=30)
-                if audio_bytes:
-                    st.audio(audio_bytes, format="audio/wav")
-                    if st.button("Transcribe this recording"):
-                        with st.spinner("Transcribing..."):
-                            text_ans = transcribe_audio_bytes(audio_bytes)
-                        st.session_state.voice_attempts.append({"audio": audio_bytes, "text": text_ans})
-                        st.success("Recording transcribed. This will be used as your answer.")
-                        st.rerun()
-            else:
-                if remaining == 0:
-                    st.warning("Time is up for this question. No new recordings allowed.")
-                elif current_attempts >= MAX_VOICE_ATTEMPTS:
-                    st.warning("You have reached the maximum of 3 voice attempts for this question.")
-
-            if st.session_state.voice_attempts:
-                latest_text = st.session_state.voice_attempts[-1]["text"]
-                st.text_area("Latest transcript", latest_text, height=180, disabled=True)
+            if remaining == 0:
+                st.warning("Time is up for this question. You can no longer edit the answer.")
 
             if not st.session_state.show_followup:
-                submit_disabled = remaining == 0
-                if st.button("Submit Answer →", type="primary", use_container_width=True, disabled=submit_disabled):
-                    if not st.session_state.voice_attempts:
-                        st.warning("Please record and transcribe an answer before submitting.")
+                if st.button("Submit Answer →", type="primary", use_container_width=True, disabled=remaining == 0):
+                    if not answer_text.strip():
+                        st.warning("Please type an answer before submitting.")
                     else:
-                        answer_text = st.session_state.voice_attempts[-1]["text"]
                         submit_answer(answer_text, idx)
             else:
                 r = st.session_state.last_result
