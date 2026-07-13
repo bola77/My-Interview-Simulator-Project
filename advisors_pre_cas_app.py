@@ -1,6 +1,6 @@
 import json
-import time
 import random
+import time
 
 import pandas as pd
 import streamlit as st
@@ -134,10 +134,60 @@ COURSE_PROFILES = {
         "extra_tip": "Mention business modules (finance, marketing, strategy) and how they support your career in management or entrepreneurship.",
         "keywords": ["marketing", "finance", "accounting", "strategy", "international business"],
     },
-    # ... keep all your existing profiles ...
 }
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+
+def init_session_state():
+    defaults = {
+        "started": False,
+        "completed": False,
+        "question_sequence": [],
+        "idx": 0,
+        "scores": [],
+        "log": [],
+        "show_followup": False,
+        "profile": {},
+        "think_time": DEFAULT_THINK_TIME,
+        "hint_mode": DEFAULT_HINT_MODE,
+        "min_words": DEFAULT_MIN_WORDS,
+        "current_category": "",
+        "current_question": "",
+        "question_start": None,
+        "question_closed": False,
+        "auto_advanced": False,
+        "last_result": None,
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+def reset_interview_state():
+    keys_to_clear = [
+        "started",
+        "completed",
+        "question_sequence",
+        "idx",
+        "scores",
+        "log",
+        "show_followup",
+        "profile",
+        "think_time",
+        "hint_mode",
+        "min_words",
+        "current_category",
+        "current_question",
+        "question_start",
+        "question_closed",
+        "auto_advanced",
+        "last_result",
+    ]
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
+    init_session_state()
 
 
 def build_one_question_per_category():
@@ -182,7 +232,9 @@ def counsellor_risk(avg: float) -> str:
 
 
 def time_left():
-    start = st.session_state.get("question_start", time.time())
+    start = st.session_state.get("question_start")
+    if not start:
+        return QUESTION_TIME_SECONDS, f"{QUESTION_TIME_SECONDS // 60:02d}:00"
     elapsed = time.time() - start
     remaining = max(0, int(QUESTION_TIME_SECONDS - elapsed))
     minutes = remaining // 60
@@ -216,7 +268,7 @@ def fallback_score(answer: str) -> dict:
             }
 
     generic_pos = sum(1 for p in POSITIVE if p in lower)
-    course_track = st.session_state.profile.get("course_track") if "profile" in st.session_state else None
+    course_track = st.session_state.profile.get("course_track") if st.session_state.profile else None
     cluster_hits = 0
     if course_track and course_track in COURSE_PROFILES:
         keywords = COURSE_PROFILES[course_track].get("keywords", [])
@@ -356,10 +408,9 @@ def evaluate_with_openai(answer_text: str, category: str, question: str, profile
 
 def submit_current_answer(answer_text: str, idx: int):
     wc = len(answer_text.strip().split())
-    if wc < st.session_state.get("min_words", 20):
+    if wc < st.session_state.min_words:
         st.warning(
-            f"Your answer is quite short ({wc} words). "
-            f"Aim for at least {st.session_state.get('min_words', 20)} words."
+            f"Your answer is quite short ({wc} words). Aim for at least {st.session_state.min_words} words."
         )
 
     try:
@@ -401,13 +452,15 @@ def submit_current_answer(answer_text: str, idx: int):
         st.session_state.show_followup = True
         st.session_state.last_result = result
     else:
-        wait_s = int(st.session_state.get("think_time", 0))
+        wait_s = int(st.session_state.think_time)
         if wait_s > 0:
             countdown_box(wait_s, label="Next question")
         st.session_state.idx += 1
         pick_question()
         st.rerun()
 
+
+init_session_state()
 
 with st.sidebar:
     st.header("👤 Applicant Profile")
@@ -429,10 +482,11 @@ with st.sidebar:
     with c1:
         start = st.button("Start Pre-CAS Interview", use_container_width=True, type="primary")
     with c2:
-        if st.button("Reset Session", use_container_width=True):
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
-            st.rerun()
+        reset = st.button("Reset Session", use_container_width=True)
+
+    if reset:
+        reset_interview_state()
+        st.rerun()
 
     total_sections = len(QUESTION_BANK)
     approx_minutes = total_sections * 3
@@ -442,41 +496,37 @@ with st.sidebar:
     )
 
     if start:
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-        st.session_state.update(
-            {
-                "started": True,
-                "completed": False,
-                "question_sequence": build_one_question_per_category(),
-                "idx": 0,
-                "scores": [],
-                "log": [],
-                "show_followup": False,
-                "profile": {
-                    "name": s_name or "Applicant",
-                    "university": s_university or "your university",
-                    "course": s_course or "your course",
-                    "country": s_country or "Nigeria",
-                    "experience": s_experience or "",
-                    "course_track": course_track,
-                },
-                "think_time": DEFAULT_THINK_TIME,
-                "hint_mode": DEFAULT_HINT_MODE,
-                "min_words": DEFAULT_MIN_WORDS,
-            }
-        )
+        reset_interview_state()
+        st.session_state.started = True
+        st.session_state.completed = False
+        st.session_state.question_sequence = build_one_question_per_category()
+        st.session_state.idx = 0
+        st.session_state.scores = []
+        st.session_state.log = []
+        st.session_state.show_followup = False
+        st.session_state.profile = {
+            "name": s_name or "Applicant",
+            "university": s_university or "your university",
+            "course": s_course or "your course",
+            "country": s_country or "Nigeria",
+            "experience": s_experience or "",
+            "course_track": course_track,
+        }
+        st.session_state.think_time = DEFAULT_THINK_TIME
+        st.session_state.hint_mode = DEFAULT_HINT_MODE
+        st.session_state.min_words = DEFAULT_MIN_WORDS
         pick_question()
         st.rerun()
 
-    if st.session_state.get("started") and not st.session_state.get("completed"):
+    if st.session_state.started and not st.session_state.completed:
         remaining, t_str = time_left()
         st.caption(f"Time left this question: {t_str}")
         if remaining == 0:
             st.warning("Time is up for this question!")
 
 st.title("Advisors Academy Pre-CAS Interview")
-st_autorefresh(interval=1000, key="timer_refresh")
+if st.session_state.started and not st.session_state.completed:
+    st_autorefresh(interval=1000, key="timer_refresh")
 st.caption("Typed-response UK pre-CAS mock interview with OpenAI evaluation and counsellor reporting.")
 
 with st.expander("How evaluation works"):
@@ -488,15 +538,13 @@ with st.expander("How evaluation works"):
         """
     )
 
-if not st.session_state.get("started"):
-    total_sections = len(QUESTION_BANK)
-    approx_minutes = total_sections * 3
+if not st.session_state.started:
     st.info(
         f"Fill in the applicant profile on the left, then click 'Start Pre-CAS Interview'. "
         f"Estimated duration: about {approx_minutes} minutes for 1 question per category."
     )
 else:
-    if st.session_state.get("completed"):
+    if st.session_state.completed:
         scores = st.session_state.scores
         avg = sum(scores) / len(scores) if scores else 0
         v = verdict(avg)
@@ -504,7 +552,7 @@ else:
 
         st.subheader("📊 Pre-CAS Performance Summary")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Applicant", st.session_state.profile["name"])
+        m1.metric("Applicant", st.session_state.profile.get("name", "Applicant"))
         m2.metric("Questions", len(scores))
         m3.metric("Average Score", f"{avg:.1f} / 5")
         m4.metric("Verdict", v)
@@ -517,64 +565,64 @@ else:
         red_flag_count = int(df["Red Flag"].sum()) if not df.empty else 0
         st.write(f"Red-flagged responses: **{red_flag_count}**")
 
-        category_summary = (
-            df.groupby("Category", as_index=False)
-            .agg(
-                Average_Score=("Score", "mean"),
-                Readiness=("Readiness", "last"),
-                Red_Flags=("Red Flag", "sum"),
+        if not df.empty:
+            category_summary = (
+                df.groupby("Category", as_index=False)
+                .agg(
+                    Average_Score=("Score", "mean"),
+                    Readiness=("Readiness", "last"),
+                    Red_Flags=("Red Flag", "sum"),
+                )
             )
-        )
-        st.dataframe(category_summary, use_container_width=True, hide_index=True)
+            st.dataframe(category_summary, use_container_width=True, hide_index=True)
 
-        st.divider()
-        st.subheader("Per-question review")
-        st.dataframe(
-            df[
-                [
-                    "Question #",
-                    "Category",
-                    "Score",
-                    "Readiness",
-                    "Feedback",
-                    "Student Tip",
-                    "Risk Flags",
-                    "Missing Points",
-                    "Counsellor Note",
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        weak = df[df["Score"] <= 2]
-        if not weak.empty:
             st.divider()
-            st.subheader("Priority interventions")
-            for _, row in weak.iterrows():
-                with st.expander(f"Q{int(row['Question #'])} — {row['Category']} ({int(row['Score'])}/5)"):
-                    st.write(f"**Question:** {row['Question']}")
-                    st.write(f"**Answer:** {row['Answer']}")
-                    st.error(f"**Feedback:** {row['Feedback']}")
-                    st.info(f"**Student tip:** {row['Student Tip']}")
-                    st.warning(f"**Missing points:** {row['Missing Points']}")
-                    st.caption(f"Counsellor note: {row['Counsellor Note']}")
+            st.subheader("Per-question review")
+            st.dataframe(
+                df[
+                    [
+                        "Question #",
+                        "Category",
+                        "Score",
+                        "Readiness",
+                        "Feedback",
+                        "Student Tip",
+                        "Risk Flags",
+                        "Missing Points",
+                        "Counsellor Note",
+                    ]
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
 
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "⬇ Download Counsellor Report (CSV)",
-            csv,
-            "advisors_pre_cas_counsellor_report.csv",
-            "text/csv",
-        )
+            weak = df[df["Score"] <= 2]
+            if not weak.empty:
+                st.divider()
+                st.subheader("Priority interventions")
+                for _, row in weak.iterrows():
+                    with st.expander(f"Q{int(row['Question #'])} — {row['Category']} ({int(row['Score'])}/5)"):
+                        st.write(f"**Question:** {row['Question']}")
+                        st.write(f"**Answer:** {row['Answer']}")
+                        st.error(f"**Feedback:** {row['Feedback']}")
+                        st.info(f"**Student tip:** {row['Student Tip']}")
+                        st.warning(f"**Missing points:** {row['Missing Points']}")
+                        st.caption(f"Counsellor note: {row['Counsellor Note']}")
 
+            csv = df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "⬇ Download Counsellor Report (CSV)",
+                csv,
+                "advisors_pre_cas_counsellor_report.csv",
+                "text/csv",
+            )
     else:
         categories = [item["category"] for item in st.session_state.question_sequence]
         idx = st.session_state.idx
         total_q = len(st.session_state.question_sequence)
 
         remaining, t_str = time_left()
-        st.progress(idx / total_q, text=f"Question {idx + 1} of {total_q}")
+        st.progress(idx / total_q if total_q else 0, text=f"Question {idx + 1} of {total_q}")
         st.caption(f"Time left for this question: {t_str}")
 
         if remaining == 0:
@@ -587,7 +635,7 @@ else:
             st.markdown("### Interview Question")
             st.write(st.session_state.current_question)
 
-            if st.session_state.get("hint_mode", True):
+            if st.session_state.hint_mode:
                 st.info(
                     QUESTION_HINTS.get(
                         st.session_state.current_category,
@@ -622,7 +670,7 @@ else:
 
             if remaining == 0 and not answer_text.strip():
                 st.warning("Time is up and no answer was submitted for this question.")
-                if not st.session_state.get("auto_advanced", False):
+                if not st.session_state.auto_advanced:
                     st.session_state.auto_advanced = True
                     st.session_state.scores.append(1)
                     st.session_state.log.append(
@@ -700,12 +748,11 @@ else:
 
             st.divider()
             p = st.session_state.profile
-            st.markdown(f"👤 **{p['name']}**")
-            st.markdown(f"🎓 {p['course']}")
-            st.markdown(f"🏫 {p['university']}")
-            st.markdown(f"🌍 {p['country']}")
-            if p["experience"]:
+            st.markdown(f"👤 **{p.get('name', 'Applicant')}**")
+            st.markdown(f"🎓 {p.get('course', '')}")
+            st.markdown(f"🏫 {p.get('university', '')}")
+            st.markdown(f"🌍 {p.get('country', '')}")
+            if p.get("experience"):
                 st.markdown(f"💼 {p['experience']}")
-            course_track = p.get("course_track")
-            if course_track:
-                st.markdown(f"📚 Track: {course_track}")
+            if p.get("course_track"):
+                st.markdown(f"📚 Track: {p['course_track']}")
