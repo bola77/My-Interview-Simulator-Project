@@ -10,12 +10,6 @@ from openai import OpenAI
 
 from advisors_theme import apply_advisors_theme
 
-st.set_page_config(
-    page_title="Advisors Academy Pre-CAS Interview",
-    page_icon="🎓",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
 apply_advisors_theme()
 
