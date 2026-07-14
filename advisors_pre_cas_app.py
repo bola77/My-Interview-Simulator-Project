@@ -5,6 +5,7 @@ import time
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit_autorefresh import st_autorefresh
 from openai import OpenAI
 
 from advisors_theme import apply_advisors_theme
@@ -537,6 +538,7 @@ def time_left():
 
 
 def timer_component(remaining_seconds: int):
+    def timer_component(remaining_seconds: int):
     color = "#15803d" if remaining_seconds > 60 else "#d97706" if remaining_seconds > 30 else "#dc2626"
     components.html(
         f"""
@@ -578,26 +580,28 @@ def timer_component(remaining_seconds: int):
             </div>
 
             <script>
-                (function() {{
-                    const end = Date.now() + ({remaining_seconds} * 1000);
-                    const el = document.getElementById("timer");
+                const end = Date.now() + ({remaining_seconds} * 1000);
+                const el = document.getElementById("timer");
 
-                    function format(sec) {{
-                        const m = String(Math.floor(sec / 60)).padStart(2, "0");
-                        const s = String(sec % 60).padStart(2, "0");
-                        return `${{m}}:${{s}}`;
+                function format(sec) {{
+                    const m = String(Math.floor(sec / 60)).padStart(2, "0");
+                    const s = String(sec % 60).padStart(2, "0");
+                    return `${{m}}:${{s}}`;
+                }}
+
+                function tick() {{
+                    const left = Math.max(0, Math.floor((end - Date.now()) / 1000));
+                    el.textContent = format(left);
+
+                    if (left <= 0) {{
+                        clearInterval(window.__aaTimerInterval);
+                        window.parent.location.reload();
                     }}
+                }}
 
-                    function tick() {{
-                        const left = Math.max(0, Math.floor((end - Date.now()) / 1000));
-                        el.textContent = format(left);
-                        if (left <= 0) clearInterval(window.__aaTimerInterval);
-                    }}
-
-                    tick();
-                    if (window.__aaTimerInterval) clearInterval(window.__aaTimerInterval);
-                    window.__aaTimerInterval = setInterval(tick, 1000);
-                }})();
+                tick();
+                if (window.__aaTimerInterval) clearInterval(window.__aaTimerInterval);
+                window.__aaTimerInterval = setInterval(tick, 1000);
             </script>
         </body>
         </html>
