@@ -538,7 +538,6 @@ def time_left():
 
 
 def timer_component(remaining_seconds: int):
-    def timer_component(remaining_seconds: int):
     color = "#15803d" if remaining_seconds > 60 else "#d97706" if remaining_seconds > 30 else "#dc2626"
     components.html(
         f"""
