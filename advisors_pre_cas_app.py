@@ -188,7 +188,7 @@ POSITIVE = [
 DEFAULT_THINK_TIME = 3
 DEFAULT_HINT_MODE = True
 DEFAULT_MIN_WORDS = 20
-QUESTION_TIME_SECONDS = 3 * 60
+QUESTION_TIME_SECONDS = 5 * 60
 
 COURSE_PROFILES = {
     "UG – Business & Management": {
@@ -855,40 +855,40 @@ else:
                 )
 
             st.subheader("Type your answer")
-            answer_text = st.text_area(
-                "Applicant answer",
-                key=f"answer_{idx}",
-                height=280,
-                placeholder="Type the applicant's answer here...",
-                disabled=remaining == 0,
-            )
+answer_text = st.text_area(
+    "Applicant answer",
+    key=f"answer_{idx}",
+    height=280,
+    placeholder="Type the applicant's answer here...",
+    disabled=remaining == 0,
+)
 
-            if remaining == 0:
-                st.warning("Time is up for this question. Moving to the next question...")
+if remaining == 0:
+    st.warning("Time is up for this question. Moving to the next question...")
 
-            if not st.session_state.show_followup:
-                if st.button("Submit Answer →", type="primary", use_container_width=True, disabled=remaining == 0):
-                    if not answer_text.strip():
-                        st.warning("Please type an answer before submitting.")
-                    else:
-                        submit_answer(answer_text, idx)
-            else:
-                r = st.session_state.last_result
-                stars = "★" * r["score"] + "☆" * (5 - r["score"])
-                st.error(f"Score: {stars} ({r['score']}/5) — {r['feedback']}")
-                st.warning(f"🔍 Follow-up: {FOLLOW_UPS[st.session_state.current_category]}")
-                follow = st.text_area(
-                    "Follow-up answer",
-                    height=160,
-                    key=f"follow_{idx}",
-                    placeholder="Provide more specific details to recover credibility…",
-                )
-                if st.button("Submit Follow-up →", type="primary", use_container_width=True):
-                    if follow.strip() and len(follow.split()) >= 20:
-                        submit_answer(follow, idx)
-                    else:
-                        st.warning("Please provide a sufficiently detailed follow-up (at least 20 words).")
-
+if not st.session_state.show_followup:
+    
+    if st.button("Submit Answer →", type="primary", use_container_width=True, disabled=remaining == 0):
+        if not answer_text.strip():
+            st.warning("Please type an answer before submitting.")
+        else:
+            submit_answer(answer_text, idx)
+else:
+    r = st.session_state.last_result
+    stars = "★" * r["score"] + "☆" * (5 - r["score"])
+    st.error(f"Score: {stars} ({r['score']}/5) — {r['feedback']}")
+    st.warning(f"🔍 Follow-up: {FOLLOW_UPS[st.session_state.current_category]}")
+    follow = st.text_area(
+        "Follow-up answer",
+        height=160,
+        key=f"follow_{idx}",
+        placeholder="Provide more specific details to recover credibility…",
+    )
+    if st.button("Submit Follow-up →", type="primary", use_container_width=True):
+        if follow.strip() and len(follow.split()) >= 20:
+            submit_answer(follow, idx)
+        else:
+            st.warning("Please provide a sufficiently detailed follow-up (at least 20 words).")
         with right:
             st.subheader("Live Timer")
             timer_component(remaining)
