@@ -1,7 +1,6 @@
 import random
 import time
 import json
-from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import streamlit as st
@@ -123,7 +122,7 @@ DEFAULT_MIN_WORDS = 20
 QUESTION_TIME_SECONDS = 5 * 60  # 5 minutes per question
 MAX_VOICE_ATTEMPTS = 3
 
-# ------------ Prime Crown UK course clusters (keep your full dict) ------------
+# ------------ Course clusters (keep your full dict) ------------
 
 COURSE_PROFILES = {
     "UG – Business & Management": {
@@ -134,7 +133,7 @@ COURSE_PROFILES = {
     # ... keep all your existing profiles ...
 }
 
-# ------------ OpenAI client (Whisper + text eval) ------------
+# ------------ OpenAI client (Whisper + Responses) ------------
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
@@ -516,7 +515,7 @@ else:
             if remaining == 0 and not st.session_state.voice_attempts:
                 st.warning("Time is up and no recording was submitted for this question.")
 
-            # We base scoring on the latest recorded transcript
+            # Scoring based on latest transcript
             if not st.session_state.show_followup:
                 if st.button("Submit Answer →", type="primary", use_container_width=True):
                     if not st.session_state.voice_attempts:
@@ -531,7 +530,7 @@ else:
                                 f"Aim for at least {st.session_state.get('min_words', 20)} words."
                             )
 
-                        # 1. Local scoring first
+                        # 1. Local scoring
                         local = fallback_score(cleaned)
 
                         final_score = local["score"]
@@ -544,7 +543,7 @@ else:
                         missing_points = []
                         readiness = "Moderate risk"
 
-                        # 2. Only call OpenAI for weak answers (score <= 2)
+                        # 2. OpenAI only for weak answers
                         if final_score <= 2:
                             try:
                                 oa = openai_evaluate_answer(
