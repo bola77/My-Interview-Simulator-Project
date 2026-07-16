@@ -13,10 +13,10 @@ from advisors_theme import apply_advisors_theme
 
 # Page config
 st.set_page_config(
-    page_title="Advisors Academy Pre-CAS Interview",
+    page_title=" Pre-CAS Interview",
     page_icon="🎓",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 apply_advisors_theme()
